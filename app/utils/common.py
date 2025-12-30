@@ -17,8 +17,14 @@ def setup_logging(name: str = "app"):
     return logger
 
 def get_project_root() -> str:
-    # Assuming this file is in app/utils/common.py
-    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if getattr(sys, 'frozen', False):
+         # Running as compiled executable
+         # Return the directory of the executable
+         return os.path.dirname(sys.executable)
+    else:
+        # Running as script
+        # Assuming this file is in app/utils/common.py
+        return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def get_workflows_dir() -> str:
     return os.path.join(get_project_root(), "workflows")
