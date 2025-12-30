@@ -1,7 +1,7 @@
 import os
 import json
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QPushButton, QMessageBox, QLabel, QCheckBox
+    QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem, QPushButton, QMessageBox, QLabel, QCheckBox
 )
 from app.utils.common import get_workflows_dir
 from app.core.models import Workflow
