@@ -20,9 +20,19 @@ def main():
     windows = {}
     
     def on_edit_workflow(name):
-        editor = WorkflowEditor(name, lambda: windows.pop("editor", None))
-        windows["editor"] = editor
-        editor.show()
+        try:
+            editor = WorkflowEditor(name, lambda: windows.pop("editor", None))
+            windows["editor"] = editor
+            editor.show()
+        except Exception as e:
+            from PyQt6.QtWidgets import QMessageBox
+            # Show error logic even if we don't have a parent window easily accessible, 
+            # we can use the active window or None (if app exists)
+            logger.error(f"Failed to open editor: {e}")
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Icon.Critical)
+            msg.setText(f"Error opening editor for '{name}':\n{e}")
+            msg.exec()
         # We might want to hide manager or keep it open?
         # PRD 3.0: "Workflow Manager... Select -> Edit".
         # Usually Manager stays or hides. Let's keep it open for now.
