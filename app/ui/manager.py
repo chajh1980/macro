@@ -84,24 +84,27 @@ class WorkflowManager(QWidget):
                 self.list_widget.addItem(item)
 
     def _new_workflow(self):
-        # For now just create a default one
-        # In real app, ask for name
-        import datetime
-        name = f"workflow_{int(datetime.datetime.now().timestamp())}"
-        path = os.path.join(get_workflows_dir(), name)
-        os.makedirs(path)
-        
-        # Create empty flow.json
-        workflow = Workflow(
-            name=name,
-            created_at=str(datetime.datetime.now()),
-            updated_at=str(datetime.datetime.now())
-        )
-        
-        with open(os.path.join(path, "flow.json"), "w") as f:
-            f.write(workflow.json())
+        try:
+            # For now just create a default one
+            # In real app, ask for name
+            import datetime
+            name = f"workflow_{int(datetime.datetime.now().timestamp())}"
+            path = os.path.join(get_workflows_dir(), name)
+            os.makedirs(path)
             
-        self.refresh_list()
+            # Create empty flow.json
+            workflow = Workflow(
+                name=name,
+                created_at=str(datetime.datetime.now()),
+                updated_at=str(datetime.datetime.now())
+            )
+            
+            with open(os.path.join(path, "flow.json"), "w") as f:
+                f.write(workflow.json())
+                
+            self.refresh_list()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to create new workflow:\n{e}")
 
     def _edit_workflow(self):
         item = self.list_widget.currentItem()
