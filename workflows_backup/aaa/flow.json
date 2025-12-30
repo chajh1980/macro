@@ -1,0 +1,28 @@
+{
+  "steps": [
+    {
+      "condition": {
+        "type": "wait",
+        "image": null,
+        "text": null,
+        "wait": {
+          "seconds": 0.0
+        }
+      },
+      "action": {
+        "type": "move",
+        "move": {
+          "position": [
+            24,
+            61
+          ]
+        },
+        "click": null,
+        "keypress": null,
+        "goto": null
+      },
+      "step_type": "general",
+      "interval_ms": 5
+    }
+  ]
+}

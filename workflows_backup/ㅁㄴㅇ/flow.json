@@ -1,0 +1,28 @@
+{
+  "steps": [
+    {
+      "condition": {
+        "type": "text",
+        "image": null,
+        "text": {
+          "target_text": "블로",
+          "watch_area": null,
+          "timeout_s": null
+        },
+        "wait": null
+      },
+      "action": {
+        "type": "click",
+        "move": null,
+        "click": {
+          "use_condition_target": true,
+          "position": null
+        },
+        "keypress": null,
+        "goto": null
+      },
+      "step_type": "general",
+      "interval_ms": 5
+    }
+  ]
+}

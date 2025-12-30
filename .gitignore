@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.DS_Store
+.venv
+venv/
+env/
+dist/
+build/
+*.spec
+.idea/
+.vscode/
+workflows/*
+!workflows/.keep
+# Ensure we don't ignore the workflows directory itself if empty, but maybe we want to ignore user workflows?
+# The user might want to version control their workflows. Let's include them for now.
+# If they are large specific assets, maybe ignore.
+# But for now, let's keep workflows so they persist.

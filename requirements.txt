@@ -1,0 +1,7 @@
+PyQt6
+PyAutoGUI
+Pillow
+opencv-python
+easyocr
+pynput
+pyinstaller
