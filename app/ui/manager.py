@@ -68,7 +68,20 @@ class WorkflowManager(QWidget):
             
         for name in os.listdir(workflows_dir):
             if os.path.isdir(os.path.join(workflows_dir, name)):
-                self.list_widget.addItem(name)
+                # Try to read the real name from flow.json
+                display_text = name
+                json_path = os.path.join(workflows_dir, name, "flow.json")
+                if os.path.exists(json_path):
+                    try:
+                        with open(json_path, 'r') as f:
+                            data = json.load(f)
+                            if "name" in data:
+                                display_text = f"{data['name']} ({name})"
+                    except: pass
+                
+                item = QListWidgetItem(display_text)
+                item.setData(Qt.ItemDataRole.UserRole, name) # Store folder name
+                self.list_widget.addItem(item)
 
     def _new_workflow(self):
         # For now just create a default one
@@ -93,17 +106,20 @@ class WorkflowManager(QWidget):
     def _edit_workflow(self):
         item = self.list_widget.currentItem()
         if item:
-            self.on_edit_workflow(item.text())
+            folder_name = item.data(Qt.ItemDataRole.UserRole)
+            self.on_edit_workflow(folder_name)
 
     def _run_workflow(self):
         item = self.list_widget.currentItem()
         if item:
-            self.on_run_workflow(item.text())
+            folder_name = item.data(Qt.ItemDataRole.UserRole)
+            self.on_run_workflow(folder_name)
 
     def _delete_workflow(self):
         item = self.list_widget.currentItem()
         if item:
-            name = item.text()
+            folder_name = item.data(Qt.ItemDataRole.UserRole)
+            name = folder_name # For confirmation msg
             confirm = QMessageBox.question(
                 self, "Confirm Delete",
                 f"Are you sure you want to delete workflow '{name}'?",
@@ -112,7 +128,7 @@ class WorkflowManager(QWidget):
             
             if confirm == QMessageBox.StandardButton.Yes:
                 import shutil
-                path = os.path.join(get_workflows_dir(), name)
+                path = os.path.join(get_workflows_dir(), folder_name)
                 if os.path.exists(path):
                     try:
                         shutil.rmtree(path)
