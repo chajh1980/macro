@@ -1,7 +1,7 @@
 PyQt6
 PyAutoGUI
 Pillow
-opencv-python
+opencv-python-headless
 pydantic
 pynput
 pyinstaller
