@@ -11,7 +11,33 @@ from app.utils.common import setup_logging, get_workflows_dir
 import json
 import threading
 
-logger = setup_logging()
+
+# Debug Logging for Segfault Diagnosis
+import logging
+import sys
+import os
+
+def setup_debug_logging():
+    try:
+        log_path = os.path.join(os.path.expanduser("~"), "Desktop", "automacro_debug.log")
+        logging.basicConfig(
+            filename=log_path,
+            level=logging.DEBUG,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        return logging.getLogger("startup")
+    except Exception:
+        return logging.getLogger("startup_fallback")
+
+logger = setup_debug_logging()
+logger.info("AutoMacro starting up...")
+logger.info(f"Python: {sys.version}")
+logger.info(f"Platform: {sys.platform}")
+
+from app.utils.common import setup_logging as app_setup_logging
+# We can continue using the file logger or switch/add the app one.
+# For now let's rely on the global file config we just set.
+
 
 def main():
     app = QApplication(sys.argv)
