@@ -191,12 +191,13 @@ class WorkflowRunner(QObject):
                     return True
                 
                 # Check Timeout
-                if time.time() - start_time > timeout:
-                    self.log_signal.emit(f"[AWAIT] Timeout reached ({timeout}s). Failed.")
+                elapsed = time.time() - start_time
+                if elapsed > timeout:
+                    self.log_signal.emit(f"[AWAIT] Timeout reached ({elapsed:.1f}s / {timeout}s). Failed.")
                     return False
                 
                 # Wait Interval
-                self.log_signal.emit(f"[AWAIT] Retrying in {interval}s...")
+                self.log_signal.emit(f"[AWAIT] Condition failed. Retrying in {interval}s... (Elapsed: {elapsed:.1f}s)")
                 if not self._interruptible_sleep(interval):
                      return False
                      
@@ -210,7 +211,7 @@ class WorkflowRunner(QObject):
             if not condition_met:
                 # If condition was TIME (Wait), it returns True usually (unless stopped).
                 # If IMAGE/COLOR/TEXT, it returns False if not found.
-                self.log_signal.emit(f"Condition not met for step: {step.name}")
+                self.log_signal.emit(f"Condition failed: {step.name}")
                 return False
             
             # Execute Action (if condition met)
@@ -223,7 +224,6 @@ class WorkflowRunner(QObject):
 
     def _check_condition(self, step: Step) -> bool:
         condition = step.condition
-        start_time = time.time()
         
         if condition.type == ConditionType.TIME:
             # Wait logic
@@ -239,6 +239,7 @@ class WorkflowRunner(QObject):
                 import os
                 image_path = os.path.join(self.workflow_dir, image_path)
             
+            self.log_signal.emit(f"Scanning for Image: {os.path.basename(image_path) if image_path else 'None'}")
             matches = find_image_on_screen(
                 image_path,
                 confidence=condition.confidence
@@ -246,9 +247,10 @@ class WorkflowRunner(QObject):
             
             if matches:
                 self.last_match_region = matches[0]
-                self.log_signal.emit(f"Image found: {condition.target_image_path}")
+                self.log_signal.emit(f"Image found at {matches[0]}")
                 return True
             else:
+                self.log_signal.emit(f"Image NOT found.")
                 return False
                 
         elif condition.type == ConditionType.COLOR:
@@ -256,6 +258,7 @@ class WorkflowRunner(QObject):
              from app.core.image_proc import find_color_on_screen
              scan_region = tuple(condition.watch_area) if condition.watch_area else None
              
+             self.log_signal.emit(f"Scanning for Color: {condition.target_color} (Tol: {condition.color_tolerance})")
              matches = find_color_on_screen(
                  target_hex=condition.target_color,
                  tolerance=condition.color_tolerance,
@@ -266,8 +269,13 @@ class WorkflowRunner(QObject):
                  idx = condition.match_index
                  if idx < len(matches):
                      self.last_match_region = matches[idx]
-                     self.log_signal.emit(f"Color found: {condition.target_color}")
+                     self.log_signal.emit(f"Color found at {matches[idx]} (Match #{idx+1}/{len(matches)})")
                      return True
+                 else:
+                     self.log_signal.emit(f"Color matched {len(matches)} times, but index {idx} out of range.")
+                     return False
+             else:
+                 self.log_signal.emit(f"Color NOT found.")
              
              return False
                 
