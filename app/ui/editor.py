@@ -71,11 +71,6 @@ class WorkflowEditor(QMainWindow):
         # Connect Signals
         self.canvas.step_dropped.connect(self._on_step_dropped)
         self.canvas.itemClicked.connect(self._on_step_selected)
-        self.canvas.delete_requested.connect(self._delete_current_step) # New
-        self.canvas.reordered.connect(self._on_reordered) # Fix drag reorder sync
-        
-        # Connect Library Double Click
-        self.library.itemDoubleClicked.connect(self._on_library_double_click)
         
         self.save_btn.clicked.connect(self._save_workflow)
         self.delete_btn.clicked.connect(self._delete_current_step) # Connect
@@ -127,11 +122,6 @@ class WorkflowEditor(QMainWindow):
 
     def _refresh_canvas(self):
         self.canvas.update_steps(self.workflow.steps)
-
-    def _on_library_double_click(self, item):
-        type_code = item.data(Qt.ItemDataRole.UserRole)
-        category = item.data(Qt.ItemDataRole.UserRole + 1)
-        self._on_step_dropped(category, type_code)
 
     def _on_step_dropped(self, category, type_code):
         new_step = Step(
