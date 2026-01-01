@@ -112,11 +112,28 @@ class WorkflowEditor(QMainWindow):
 
     def _load_workflow(self, name: str) -> Workflow:
         path = os.path.join(get_workflows_dir(), name, "flow.json")
+        workflow = None
         if os.path.exists(path):
             with open(path, "r") as f:
-                data = json.load(f)
-                return Workflow(**data)
-        return Workflow(name=name, created_at="", updated_at="")
+                try:
+                    data = json.load(f)
+                    workflow = Workflow(**data)
+                except:
+                    pass
+        
+        if not workflow:
+            workflow = Workflow(name=name, created_at="", updated_at="")
+            
+        # Migration: Ensure all steps have unique IDs (UUIDs)
+        # Verify if migration is needed (simplistic check: re-assign all to be safe)
+        def update_ids_recursive(steps):
+            for step in steps:
+                step.id = str(uuid.uuid4())
+                if step.children:
+                    update_ids_recursive(step.children)
+                    
+        update_ids_recursive(workflow.steps)
+        return workflow
 
     def _save_workflow(self):
         path = os.path.join(get_workflows_dir(), self.workflow_name, "flow.json")
