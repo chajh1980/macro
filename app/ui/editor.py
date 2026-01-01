@@ -86,6 +86,10 @@ class WorkflowEditor(QMainWindow):
         self.inspector.step_props.capture_img_btn.clicked.connect(self._capture_image)
         self.inspector.step_props.img_capture_area_btn.clicked.connect(lambda: self._capture_area_watch(for_image=True))
         
+        # Color Page
+        self.inspector.step_props.pick_color_btn.clicked.connect(self._pick_color)
+        self.inspector.step_props.color_set_area_btn.clicked.connect(lambda: self._capture_area_watch(for_image=False))
+        
         # Move Page
         self.inspector.step_props.pick_pos_btn.clicked.connect(self._pick_point)
         
@@ -318,6 +322,24 @@ class WorkflowEditor(QMainWindow):
 
         current_step.action.target_x = x
         current_step.action.target_y = y
+        self.inspector.step_props.load_step(current_step)
+        self._refresh_canvas_item()
+
+        self.inspector.step_props.load_step(current_step)
+        self._refresh_canvas_item()
+
+    def _pick_color(self):
+        self.hide()
+        self.overlay = Overlay(mode="color")
+        self.overlay.color_picked.connect(self._on_color_picked)
+        self.overlay.show()
+        
+    def _on_color_picked(self, hex_color):
+        self.show()
+        current_step = self.inspector.current_step
+        if not current_step: return
+        
+        current_step.condition.target_color = hex_color
         self.inspector.step_props.load_step(current_step)
         self._refresh_canvas_item()
 

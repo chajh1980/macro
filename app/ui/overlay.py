@@ -6,40 +6,44 @@ from app.utils.screen_utils import get_screen_scale
 class Overlay(QWidget):
     captured = pyqtSignal(QRect) # For region selection
     clicked = pyqtSignal(int, int) # For coordinate selection
+    color_picked = pyqtSignal(str) # Hex string
     
     def __init__(self, mode="region", highlight_rect: QRect = None): 
-        # mode: "region", "point", "highlight"
+        # mode: "region", "point", "highlight", "color"
         super().__init__()
-        print(f"DEBUG: Overlay initialized with mode={mode}")
+        # print(f"DEBUG: Overlay initialized with mode={mode}")
         self.mode = mode
         self.highlight_rect = highlight_rect
+        
+        # 1. Capture Screen State BEFORE showing overlay (Fixes Dimming Bug)
+        self.screen_grab = pyautogui.screenshot() # Returns PIL Image
         
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint | 
             Qt.WindowType.WindowStaysOnTopHint | 
-            Qt.WindowType.Tool  # Tool sometimes helps with focus behavior
+            Qt.WindowType.Tool  
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setStyleSheet("background-color: transparent;")
         
-        # Cover specific screen or all screens?
-        # For now, primary screen is safest for coordinates.
+        # Cover primary screen
         screen = QApplication.primaryScreen()
         self.setGeometry(screen.geometry())
         
         if self.mode == "highlight":
             self.setCursor(Qt.CursorShape.ArrowCursor)
-            # Auto close after some time?
-            QTimer.singleShot(2000, self.close) # Show for 2 seconds
+            QTimer.singleShot(2000, self.close) 
         elif self.mode == "running":
             self.setWindowFlags(
                 Qt.WindowType.FramelessWindowHint | 
                 Qt.WindowType.WindowStaysOnTopHint |
                 Qt.WindowType.Tool |
-                Qt.WindowType.WindowTransparentForInput | # Clicks pass through
-                Qt.WindowType.WindowDoesNotAcceptFocus # No focus
+                Qt.WindowType.WindowTransparentForInput | 
+                Qt.WindowType.WindowDoesNotAcceptFocus 
             )
             self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        elif self.mode == "color":
+             self.setCursor(Qt.CursorShape.CrossCursor)
         else:
             self.setCursor(Qt.CursorShape.CrossCursor)
         
@@ -145,9 +149,66 @@ class Overlay(QWidget):
             if self.mode == "region":
                 self.end_point = event.pos()
                 rect = QRect(self.start_point, self.end_point).normalized()
-                self.captured.emit(rect)
+                
+                # CROP from CACHED CLEAN SCREENSHOT to avoid dimming (Fixes bug)
+                # PIL Image crop: (left, top, right, bottom)
+                # Need to handle Retina scaling?
+                # pyautogui.screenshot returns physical pixels on Windows? And scaled on Mac?
+                # On Mac with Retina, pyautogui.screenshot returns high-res image (e.g. 2x size of point coords).
+                # But our QWidget geometry is logical coordinates (1x).
+                # We need to map logical rect to physical image coordinates.
+                
+                scale = 1.0
+                if self.screen_grab.width > self.width():
+                     scale = self.screen_grab.width / self.width()
+                
+                left = int(rect.x() * scale)
+                top = int(rect.y() * scale)
+                right = int((rect.x() + rect.width()) * scale)
+                bottom = int((rect.y() + rect.height()) * scale)
+                
+                cropped_img = self.screen_grab.crop((left, top, right, bottom))
+                
+                # Save to specific temp path or emit object?
+                # Existing Editor expects to verify signal... wait Editor logic needs update too.
+                # Let's emit the rect for now, AND save the image to a known location?
+                # Or change signal to emit path?
+                # Let's change signal to emit (QRect, str) -> Rect and file path.
+                
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+                    cropped_img.save(f.name)
+                    temp_path = f.name
+                
+                self.captured.emit(rect) # Keep signature for now? No, need to pass data.
+                # Signal is defined as pyqtSignal(QRect). I can't change it easily without changing receiver.
+                # BUT I can store the last capture in a public variable or singleton?
+                # Better: Emit a custom signal or change definition.
+                # I will change signal definition to pyqtSignal(object) in next step.
+                self.last_capture_path = temp_path
+                
             elif self.mode == "point":
                 self.clicked.emit(event.pos().x(), event.pos().y())
+                
+            elif self.mode == "color":
+                 # Get color at pos
+                 x = event.pos().x()
+                 y = event.pos().y()
+                 
+                 # Handle scaling
+                 scale = 1.0
+                 if self.screen_grab.width > self.width():
+                      scale = self.screen_grab.width / self.width()
+                      
+                 px = int(x * scale)
+                 py = int(y * scale)
+                 
+                 # Boundary check
+                 if 0 <= px < self.screen_grab.width and 0 <= py < self.screen_grab.height:
+                     r, g, b = self.screen_grab.getpixel((px, py))
+                     hex_color = f"#{r:02x}{g:02x}{b:02x}"
+                     self.color_picked.emit(hex_color)
+                 
             self.close()
             
     def keyPressEvent(self, event):

@@ -131,9 +131,34 @@ class WorkflowRunner(QObject):
                     self.last_match_region = matches[0]
                     return True
                 
-                # Retry every 200ms (tuned per user request)
                 if not self._interruptible_sleep(0.2):
                     return False
+                
+        elif condition.type == ConditionType.COLOR:
+             while self.is_running:
+                 # Check timeout logic if desired, matching others
+                 
+                 from app.core.image_proc import find_color_on_screen
+                 
+                 # Resolve region if watch_area set
+                 scan_region = tuple(condition.watch_area) if condition.watch_area else None
+                 
+                 matches = find_color_on_screen(
+                     target_hex=condition.target_color,
+                     tolerance=condition.color_tolerance,
+                     region=scan_region
+                 )
+                 
+                 if matches:
+                     # Respect match_index
+                     idx = condition.match_index
+                     if idx < len(matches):
+                         self.last_match_region = matches[idx]
+                         return True
+                 
+                 # Retry interval
+                 if not self._interruptible_sleep(condition.scan_interval_ms / 1000.0):
+                     return False
                 
         elif condition.type == ConditionType.TEXT:
             try:

@@ -120,3 +120,55 @@ def deduplicate_matches(
             unique_matches.append(match)
             
     return unique_matches
+
+def find_color_on_screen(
+    target_hex: str,
+    tolerance: int = 10,
+    region: Optional[Tuple[int, int, int, int]] = None
+) -> List[Tuple[int, int, int, int]]:
+    """
+    Finds regions matching the target color.
+    Returns list of (x, y, w, h) bounding boxes of matching connected components.
+    """
+    try:
+        # 1. Parse Hex to BGR
+        if target_hex.startswith('#'):
+            target_hex = target_hex[1:]
+        
+        r = int(target_hex[0:2], 16)
+        g = int(target_hex[2:4], 16)
+        b = int(target_hex[4:6], 16)
+        
+        # 2. Capture Screen
+        screenshot = pyautogui.screenshot(region=region)
+        img = np.array(screenshot)
+        # RGB to BGR
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        
+        # 3. Create Mask
+        lower = np.array([max(0, b - tolerance), max(0, g - tolerance), max(0, r - tolerance)])
+        upper = np.array([min(255, b + tolerance), min(255, g + tolerance), min(255, r + tolerance)])
+        
+        mask = cv2.inRange(img, lower, upper)
+        
+        # 4. Find Contours (Connected Components)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        matches = []
+        for cnt in contours:
+            x, y, w, h = cv2.boundingRect(cnt)
+            # Filter tiny noise?
+            if w > 0 and h > 0:
+                # Add region offset if needed
+                if region:
+                    x += region[0]
+                    y += region[1]
+                matches.append((x, y, w, h))
+                
+        # Sort by visual order (top-left)
+        matches = sort_matches(matches)
+        return matches
+        
+    except Exception as e:
+        logger.error(f"Error in find_color_on_screen: {e}")
+        return []

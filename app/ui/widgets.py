@@ -26,7 +26,7 @@ class StepPropertiesWidget(QWidget):
         
         self.name_edit = QLineEdit()
         self.command_combo = QComboBox()
-        self.command_combo.addItems(["Find Image", "Move Mouse", "Click Mouse", "Wait", "Loop/Goto"])
+        self.command_combo.addItems(["Find Image", "Find Color", "Move Mouse", "Click Mouse", "Wait", "Loop/Goto"])
         
         top_layout.addRow("Step Name:", self.name_edit)
         top_layout.addRow("Action Type:", self.command_combo)
@@ -86,6 +86,61 @@ class StepPropertiesWidget(QWidget):
         p_img_layout.addRow("Move Offset:", row_img_offset)
         
         self.stack.addWidget(self.page_image)
+        
+        # 1. Color Page (New)
+        self.page_color = QWidget()
+        p_color_layout = QFormLayout()
+        self.page_color.setLayout(p_color_layout)
+        
+        # Target Color
+        self.color_val_edit = QLineEdit("#FFFFFF")
+        self.pick_color_btn = QPushButton("Pick Color")
+        self.color_preview = QLabel()
+        self.color_preview.setFixedSize(24, 24)
+        self.color_preview.setStyleSheet("background-color: #FFFFFF; border: 1px solid black;")
+        
+        row_color_target = QHBoxLayout()
+        row_color_target.addWidget(self.color_preview)
+        row_color_target.addWidget(self.color_val_edit)
+        row_color_target.addWidget(self.pick_color_btn)
+        
+        # Tolerance
+        self.color_tolerance = QSpinBox()
+        self.color_tolerance.setRange(0, 100)
+        self.color_tolerance.setValue(10)
+        
+        # Match Index (Which blob to pick)
+        self.color_match_index = QSpinBox()
+        self.color_match_index.setRange(0, 99)
+        
+        # Search Area (Re-use logic similar to Image)
+        self.color_full_window_cb = QCheckBox("Full Screen")
+        self.color_full_window_cb.setChecked(True)
+        self.color_watch_area_edit = QLineEdit()
+        self.color_watch_area_edit.setEnabled(False)
+        self.color_set_area_btn = QPushButton("Set Area")
+        self.color_set_area_btn.setEnabled(False)
+        row_color_area = QHBoxLayout()
+        row_color_area.addWidget(self.color_full_window_cb)
+        row_color_area.addWidget(self.color_watch_area_edit)
+        row_color_area.addWidget(self.color_set_area_btn)
+        
+        p_color_layout.addRow("Target Color:", row_color_target)
+        p_color_layout.addRow("Tolerance:", self.color_tolerance)
+        p_color_layout.addRow("Match Index:", self.color_match_index)
+        p_color_layout.addRow("Search Area:", row_color_area)
+        
+        self.stack.addWidget(self.page_color)
+        
+        # 2. Move Page (Re-indexed from 1 -> 2)
+        # Note: Command Combo list: ["Find Image", "Find Color", "Move Mouse", "Click Mouse", "Wait", "Loop/Goto"]
+        # Index 0: Image
+        # Index 1: Color
+        # Index 2: Move
+        # Index 3: Click
+        # Index 4: Wait
+        # Index 5: Goto
+
         
         # 1. Move Page
         self.page_move = QWidget()
@@ -161,6 +216,14 @@ class StepPropertiesWidget(QWidget):
         self.img_offset_x.valueChanged.connect(self._sync_data)
         self.img_offset_y.valueChanged.connect(self._sync_data)
         
+        # Color
+        self.color_val_edit.textChanged.connect(self._sync_data)
+        self.color_val_edit.textChanged.connect(self._update_color_preview) # Preview update
+        self.color_tolerance.valueChanged.connect(self._sync_data)
+        self.color_match_index.valueChanged.connect(self._sync_data)
+        self.color_full_window_cb.toggled.connect(self._on_color_full_window_toggled)
+        self.color_watch_area_edit.textChanged.connect(self._sync_data)
+        
         # Move
         self.move_x.valueChanged.connect(self._sync_data)
         self.move_y.valueChanged.connect(self._sync_data)
@@ -180,6 +243,17 @@ class StepPropertiesWidget(QWidget):
         self.img_capture_area_btn.setEnabled(not checked)
         if checked: self.img_watch_area_edit.clear()
         self._sync_data()
+
+    def _on_color_full_window_toggled(self, checked):
+        self.color_watch_area_edit.setEnabled(not checked)
+        self.color_set_area_btn.setEnabled(not checked)
+        if checked: self.color_watch_area_edit.clear()
+        self._sync_data()
+        
+    def _update_color_preview(self, text):
+        try:
+             self.color_preview.setStyleSheet(f"background-color: {text}; border: 1px solid black;")
+        except: pass
         
     def load_step(self, step: Step):
         self.current_step = step
@@ -190,27 +264,26 @@ class StepPropertiesWidget(QWidget):
         # Determine Mode
         mode_idx = 0 # Default Image
         if step.action.type == ActionType.GOTO:
-            mode_idx = 4
+            mode_idx = 5
         elif step.condition.type == ConditionType.TIME:
             if step.action.type == ActionType.NONE:
-                mode_idx = 3 # Wait
+                mode_idx = 4 # Wait
             else:
                  # Move or Click
                  if step.action.type == ActionType.CLICK:
-                     mode_idx = 2 # Click
+                     mode_idx = 3 # Click
                  elif step.action.type == ActionType.MOVE:
-                     mode_idx = 1 # Move Logic check
+                     mode_idx = 2 # Move Logic check
+        elif step.condition.type == ConditionType.COLOR:
+            mode_idx = 1
         elif step.condition.type == ConditionType.IMAGE:
             mode_idx = 0
             
-        # Ambiguity check: Move can be ActionType.MOVE with ConditionType.TIME
-        # But Image Match also sets target_x/y on ActionType.MOVE (new logic)
-        
         self.command_combo.setCurrentIndex(mode_idx)
         self.stack.setCurrentIndex(mode_idx)
 
         # Populate Fields
-        # 1. Image
+        # 0. Image
         self.img_path_edit.setText(step.condition.target_image_path or "")
         self.img_confidence.setValue(step.condition.confidence or 0.9)
         if step.condition.watch_area:
@@ -219,13 +292,25 @@ class StepPropertiesWidget(QWidget):
         else:
              self.img_full_window_cb.setChecked(True)
              
-        # 2. Offsets (Image action)
+        # 1. Color
+        self.color_val_edit.setText(step.condition.target_color or "#FFFFFF")
+        self.color_tolerance.setValue(step.condition.color_tolerance)
+        self.color_match_index.setValue(step.condition.match_index)
+        if step.condition.watch_area and step.condition.type == ConditionType.COLOR:
+             self.color_full_window_cb.setChecked(False)
+             self.color_watch_area_edit.setText(str(step.condition.watch_area))
+        else:
+             self.color_full_window_cb.setChecked(True)
+        self._update_color_preview(step.condition.target_color or "#FFFFFF")
+
+        # 2. Offsets (Image action uses Move params too)
+        # 3. Move
         tx = step.action.target_x or 0
         ty = step.action.target_y or 0
+        
         self.img_offset_x.setValue(tx)
         self.img_offset_y.setValue(ty)
         
-        # 3. Move
         self.move_x.setValue(tx)
         self.move_y.setValue(ty)
         
@@ -259,26 +344,36 @@ class StepPropertiesWidget(QWidget):
                 self.current_step.condition.watch_area = eval(txt) if txt else None
             except: pass
             
-        elif idx == 1: # Move Mouse -> Condition.TIME, Action.MOVE
+        elif idx == 1: # Find Color -> Condition.COLOR, Action.MOVE
+            self.current_step.condition.type = ConditionType.COLOR
+            self.current_step.action.type = ActionType.MOVE # Moves to found color
+            self.current_step.condition.target_color = self.color_val_edit.text()
+            self.current_step.condition.color_tolerance = self.color_tolerance.value()
+            self.current_step.condition.match_index = self.color_match_index.value()
+            # Reset Image params? No, just overwrite fields needed.
+            try:
+                txt = self.color_watch_area_edit.text()
+                self.current_step.condition.watch_area = eval(txt) if txt else None
+            except: pass
+            
+        elif idx == 2: # Move Mouse -> Condition.TIME, Action.MOVE
             self.current_step.condition.type = ConditionType.TIME
             self.current_step.condition.wait_time_s = 0
             self.current_step.action.type = ActionType.MOVE
             self.current_step.action.target_x = self.move_x.value()
             self.current_step.action.target_y = self.move_y.value()
             
-        elif idx == 2: # Click Mouse -> Condition.TIME, Action.CLICK
+        elif idx == 3: # Click Mouse -> Condition.TIME, Action.CLICK
             self.current_step.condition.type = ConditionType.TIME
             self.current_step.condition.wait_time_s = 0
             self.current_step.action.type = ActionType.CLICK
-            # Click specific params if any (e.g. click count, button) - currently using default
-            # Target is current position (None) by default for atomic click
             
-        elif idx == 3: # Wait -> Condition.TIME, Action.NONE
+        elif idx == 4: # Wait -> Condition.TIME, Action.NONE
             self.current_step.condition.type = ConditionType.TIME
             self.current_step.action.type = ActionType.NONE
             self.current_step.condition.wait_time_s = self.wait_spin.value()
             
-        elif idx == 4: # Goto -> Condition.TIME, Action.GOTO
+        elif idx == 5: # Goto -> Condition.TIME, Action.GOTO
             self.current_step.condition.type = ConditionType.TIME
             self.current_step.condition.wait_time_s = 0
             self.current_step.action.type = ActionType.GOTO

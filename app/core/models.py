@@ -10,6 +10,7 @@ class StepType(str, Enum):
 class ConditionType(str, Enum):
     IMAGE = "IMAGE"
     TEXT = "TEXT"
+    COLOR = "COLOR"
     TIME = "TIME"
 
 class ActionType(str, Enum):
@@ -35,6 +36,11 @@ class Condition(BaseModel):
     # Text specific
     target_text: Optional[str] = None
     watch_area: Optional[List[int]] = None # [x, y, w, h]
+    
+    # Color specific
+    target_color: Optional[str] = None # Hex "#RRGGBB"
+    color_tolerance: int = 0
+    match_index: int = 0 # 0=First match, 1=Second...
     
     # Time specific
     wait_time_s: float = 0.0
