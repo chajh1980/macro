@@ -8,7 +8,7 @@ from app.ui.toolbar import ComponentToolbar
 from app.ui.canvas import WorkflowCanvasWidget
 from app.ui.inspector import PropertyInspectorWidget
 from app.ui.overlay import Overlay
-from app.core.models import Workflow, Step, ConditionType, ActionType, Condition, Action
+from app.core.models import Workflow, Step, ConditionType, ActionType, Condition, Action, StepType
 from app.utils.common import get_workflows_dir
 from app.utils.screen_utils import get_screen_scale
 
@@ -174,12 +174,16 @@ class WorkflowEditor(QMainWindow):
                 new_step.type = StepType.UNTIL
                 new_step.name = "Until Loop"
                 new_step.condition.type = ConditionType.IMAGE # Default condition type for Until
+            elif type_code == "await":
+                new_step.type = StepType.AWAIT
+                new_step.name = "Await"
+                new_step.condition.type = ConditionType.TIME # Default, specific policy set in properties
         
         # 3. Insert Logic (Handling Nesting)
         if target_item:
             # Dropped ON another item -> Add as child IF container
             parent_step = target_item.data(0, Qt.ItemDataRole.UserRole)
-            if parent_step and parent_step.type in [StepType.IF, StepType.UNTIL]:
+            if parent_step and parent_step.type in [StepType.IF, StepType.UNTIL, StepType.AWAIT]:
                 parent_step.children.append(new_step)
             else:
                 # Dropped on leaf -> Add as sibling AFTER? Or just append to root for simplicity now?
