@@ -6,72 +6,83 @@ from app.core.models import Step, Condition, Action, StepType, ConditionType, Ac
 class StepCardWidget(QWidget):
     def __init__(self, step: Step, index: int):
         super().__init__()
-        layout = QVBoxLayout()
+        layout = QHBoxLayout()
         layout.setContentsMargins(5, 5, 5, 5)
         self.setLayout(layout)
         
-        # Header: Index + Name + Type
-        header_layout = QHBoxLayout()
+        # 1. Index
         self.idx_label = QLabel(f"#{index}")
-        self.idx_label.setStyleSheet("font-weight: bold; color: #888;")
+        self.idx_label.setStyleSheet("font-weight: bold; color: #888; margin-right: 5px;")
+        layout.addWidget(self.idx_label)
         
+        # 2. Name
         self.name_label = QLabel(step.name)
-        self.name_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.name_label.setStyleSheet("font-weight: bold; font-size: 14px; margin-right: 10px;")
+        layout.addWidget(self.name_label)
         
-        type_str = "Unknown"
-        if step.condition.type == ConditionType.IMAGE:
-            type_str = "Condition: Image"
-        elif step.condition.type == ConditionType.TEXT:
-            type_str = "Condition: Text"
-        elif step.condition.type == ConditionType.TIME and step.condition.wait_time_s > 0:
-            type_str = "Condition: Wait"
-        elif step.action.type != ActionType.NONE:
-            type_str = f"Action: {step.action.type.value}"
-            
+        # 3. Detail (Middle, Variable)
+        detail_text = self._get_detail(step)
+        self.detail_label = QLabel(detail_text)
+        self.detail_label.setStyleSheet("color: #444;")
+        layout.addWidget(self.detail_label)
+        
+        # Spacer
+        layout.addStretch()
+        
+        # 4. Type (Right)
+        type_str = self._get_type_str(step)
         self.type_label = QLabel(type_str)
-        self.type_label.setStyleSheet("color: #666; font-size: 11px;")
+        self.type_label.setStyleSheet("color: #888; font-size: 11px;")
+        layout.addWidget(self.type_label)
         
-        header_layout.addWidget(self.idx_label)
-        header_layout.addWidget(self.name_label)
-        header_layout.addStretch()
-        header_layout.addWidget(self.type_label)
-        layout.addLayout(header_layout)
-        
-        # Body: Summary
-        self.summary_label = QLabel(self._get_summary(step))
-        self.summary_label.setWordWrap(True)
-        self.summary_label.setStyleSheet("color: #444; margin-top: 5px;")
-        layout.addWidget(self.summary_label)
-
-    def _get_summary(self, step: Step) -> str:
+    def _get_type_str(self, step: Step) -> str:
         if step.condition.type == ConditionType.IMAGE:
-            return f"Find Image: {step.condition.target_image_path or 'Not set'}"
+            return "Image"
+        elif step.condition.type == ConditionType.COLOR:
+            return "Color"
         elif step.condition.type == ConditionType.TEXT:
-            return f"Find Text: '{step.condition.target_text}'"
-            
-        # Check Action First for Time-based steps
-        if step.action.type == ActionType.CLICK:
-             # It's a click. 
-             # Technically it has a TIME condition (Wait), but user sees it as Action.
-             pos_str = "Last Match"
-             if step.action.target_x is not None and step.action.target_y is not None:
-                 pos_str = f"({step.action.target_x}, {step.action.target_y})"
-             return f"Click: {pos_str}"
-             
-        elif step.action.type == ActionType.MOVE:
-             pos_str = "Last Match" # Default for move might be last match if 0,0?
-             if step.action.target_x is not None and step.action.target_y is not None:
-                 pos_str = f"({step.action.target_x}, {step.action.target_y})"
-             return f"Move: {pos_str}"
-             
-        elif step.action.type == ActionType.GOTO:
-             return f"Goto Step: #{step.action.goto_step_index or '?'}"
-             
-        # If Action is NONE and Condition is TIME, then it's a pure Wait
+            return "Text"
+        elif step.condition.type == ConditionType.TIME and step.condition.wait_time_s > 0:
+            return "Wait"
+        elif step.action.type != ActionType.NONE:
+            return step.action.type.value # Click, Move, etc.
+        return ""
+
+    def _get_detail(self, step: Step) -> str:
+        # User requested specifics:
+        # Wait: "Wait: 2.0s"
+        # Find Color: "Target: #RRGGBB"
+        # Goto: "Goto #3"
+        
+        # 1. Wait (Time Condition)
         if step.condition.type == ConditionType.TIME:
-            return f"Wait: {step.condition.wait_time_s}s"
-            
-        return "No details"
+             if step.action.type == ActionType.NONE:
+                 return f"Wait: {step.condition.wait_time_s}s"
+        
+        # 2. Find Color
+        if step.condition.type == ConditionType.COLOR:
+             return f"Target: {step.condition.target_color}"
+             
+        # 3. Goto
+        if step.action.type == ActionType.GOTO:
+             return f"Goto #{step.action.goto_step_index or '?'}"
+             
+        # Other Defaults
+        if step.condition.type == ConditionType.IMAGE:
+             import os
+             name = os.path.basename(step.condition.target_image_path) if step.condition.target_image_path else "Not set"
+             return f"File: {name}"
+             
+        if step.condition.type == ConditionType.TEXT:
+             return f"Text: '{step.condition.target_text}'"
+             
+        if step.action.type == ActionType.CLICK:
+             return "Click"
+             
+        if step.action.type == ActionType.MOVE:
+             return "Move"
+             
+        return ""
 
 class WorkflowCanvasWidget(QListWidget):
     step_dropped = pyqtSignal(str, str)  # category, type
