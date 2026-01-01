@@ -67,21 +67,7 @@ class StepCardWidget(QWidget):
         if step.action.type == ActionType.GOTO:
              return f"Goto #{step.action.goto_step_index or '?'}"
              
-        # Other Defaults
-        if step.condition.type == ConditionType.IMAGE:
-             import os
-             name = os.path.basename(step.condition.target_image_path) if step.condition.target_image_path else "Not set"
-             return f"File: {name}"
-             
-        if step.condition.type == ConditionType.TEXT:
-             return f"Text: '{step.condition.target_text}'"
-             
-        if step.action.type == ActionType.CLICK:
-             return "Click"
-             
-        if step.action.type == ActionType.MOVE:
-             return "Move"
-             
+        # Other Defaults -> Empty per user request
         return ""
 
 class WorkflowCanvasWidget(QListWidget):
