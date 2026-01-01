@@ -139,18 +139,19 @@ def find_color_on_screen(
         g = int(target_hex[2:4], 16)
         b = int(target_hex[4:6], 16)
         
-        print(f"DEBUG_COLOR: TargetHex={target_hex}, RGB=({r},{g},{b}), BGR=({b},{g},{r})")
+        
+        logger.debug(f"DEBUG_COLOR: TargetHex={target_hex}, RGB=({r},{g},{b}), BGR=({b},{g},{r})")
         
         # 2. Capture Screen
         screenshot = pyautogui.screenshot(region=region)
         img = np.array(screenshot)
-        print(f"DEBUG_COLOR: Captured Image Shape={img.shape}")
+        logger.debug(f"DEBUG_COLOR: Captured Image Shape={img.shape}")
         
         # DEBUG: Save screenshot to verify what we are searching (User requested)
         import os
         from app.utils.common import get_app_dir
         debug_path = os.path.join(get_app_dir(), "debug_color_search.png")
-        print(f"DEBUG_COLOR: Saving debug image to {debug_path}")
+        logger.debug(f"DEBUG_COLOR: Saving debug image to {debug_path}")
         cv2.imwrite(debug_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR)) # Save original capture
         
         # Handle RGBA (Mac) -> RGB
@@ -172,13 +173,13 @@ def find_color_on_screen(
         
         # 4. Find Contours (Connected Components)
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        print(f"DEBUG_COLOR: Found {len(contours)} contours")
+        logger.debug(f"DEBUG_COLOR: Found {len(contours)} contours")
         
         # DEBUG: Log region and scale
         if region:
             from app.utils.screen_utils import get_screen_scale
             scale = get_screen_scale()
-            print(f"DEBUG_COLOR: Region provided={region}, Scale={scale}")
+            logger.debug(f"DEBUG_COLOR: Region provided={region}, Scale={scale}")
             
             # Check if capture is 1x (Logical) or 2x (Physical)
             # Img shape is (H, W, C)
@@ -188,16 +189,16 @@ def find_color_on_screen(
             capture_scale = 1.0
             if abs(w_img - w_region * scale) < 5:
                 capture_scale = scale # Captured at 2x
-                print("DEBUG_COLOR: Capture is Physical (High-Res)")
+                logger.debug("DEBUG_COLOR: Capture is Physical (High-Res)")
             elif abs(w_img - w_region) < 5:
                 capture_scale = 1.0 # Captured at 1x
-                print("DEBUG_COLOR: Capture is Logical (Low-Res)")
+                logger.debug("DEBUG_COLOR: Capture is Logical (Low-Res)")
             else:
-                 print(f"DEBUG_COLOR: Capture size mismatch? Img={w_img}, Region={w_region}")
+                 logger.warning(f"DEBUG_COLOR: Capture size mismatch? Img={w_img}, Region={w_region}")
         else:
             scale = 1.0 # Fallback
             capture_scale = 1.0
-            print("DEBUG_COLOR: No region provided (Full Screen)")
+            logger.debug("DEBUG_COLOR: No region provided (Full Screen)")
             from app.utils.screen_utils import get_screen_scale
             scale = get_screen_scale()
 
@@ -220,7 +221,7 @@ def find_color_on_screen(
                     local_x, local_y = x, y
                     x += int(region[0] * scale)
                     y += int(region[1] * scale)
-                    print(f"DEBUG_COLOR: Offset calc: LocalScaled({local_x},{local_y}) + RegionScaled({int(region[0]*scale)},{int(region[1]*scale)}) -> Global({x},{y})")
+                    # logger.debug(f"DEBUG_COLOR: Offset calc: LocalScaled({local_x},{local_y}) + RegionScaled({int(region[0]*scale)},{int(region[1]*scale)}) -> Global({x},{y})")
                     
                 matches.append((x, y, w, h))
         
@@ -230,11 +231,6 @@ def find_color_on_screen(
             # Note: matches are in GLOBAL coordinates if region is used.
             # But we want to draw on the LOCAL captured image 'img'.
             # We need to reverse the offset for drawing.
-            # Wait, img is the captured screenshot (local to region).
-            # The 'x, y' from cv2.boundingRect are local.
-            # The 'matches' list has global coordinates.
-            # Let's use the local 'x, y' from the loop above if we tracked them, 
-            # or just subtract the offset from 'mx, my'.
             
             draw_x, draw_y = mx, my
             if region:
@@ -242,8 +238,18 @@ def find_color_on_screen(
                  scale = get_screen_scale()
                  draw_x -= int(region[0] * scale)
                  draw_y -= int(region[1] * scale)
+             
+            # Scale back to local image coords if image was 1x but matches are 2x
+            if capture_scale == 1.0 and scale > 1.0:
+                 draw_x = int(draw_x / scale)
+                 draw_y = int(draw_y / scale)
+                 draw_w = int(mw / scale)
+                 draw_h = int(mh / scale)
+            else:
+                 draw_w = mw
+                 draw_h = mh
             
-            cv2.rectangle(result_img, (draw_x, draw_y), (draw_x + mw, draw_y + mh), (0, 255, 0), 2)
+            cv2.rectangle(result_img, (draw_x, draw_y), (draw_x + draw_w, draw_y + draw_h), (0, 255, 0), 2)
 
         result_path = os.path.join(get_app_dir(), "debug_color_result.png")
         cv2.imwrite(result_path, result_img)
@@ -254,6 +260,4 @@ def find_color_on_screen(
         
     except Exception as e:
         logger.error(f"Error in find_color_on_screen: {e}")
-        import traceback
-        traceback.print_exc()
         return []
