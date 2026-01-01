@@ -81,7 +81,6 @@ class StepPropertiesWidget(QWidget):
         row_img_offset.addWidget(self.img_offset_y)
         
         # Retry Policy (Await) for Image
-        # Retry Policy (Await) for Image
         self.grp_retry_img = QGroupBox("Retry Policy (Await)")
         self.grp_retry_img.setCheckable(True)
         self.grp_retry_img.setChecked(False)
@@ -146,7 +145,6 @@ class StepPropertiesWidget(QWidget):
         row_color_area.addWidget(self.color_watch_area_edit)
         row_color_area.addWidget(self.color_set_area_btn)
         
-        # Retry Policy (Await) for Color - Shared Widgets? No, separate for safety/simplicity
         # Retry Policy (Await) for Color
         self.grp_retry_color = QGroupBox("Retry Policy (Await)")
         self.grp_retry_color.setCheckable(True)
