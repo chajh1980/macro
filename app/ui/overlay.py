@@ -59,6 +59,9 @@ class Overlay(QWidget):
         self.end_point = None
         self.rubber_band = QRubberBand(QRubberBand.Shape.Rectangle, self)
         
+        # Enable Mouse Tracking for Magnifier
+        self.setMouseTracking(True)
+        
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
