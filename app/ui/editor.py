@@ -258,7 +258,15 @@ class WorkflowEditor(QMainWindow):
             item = self.canvas.topLevelItem(i)
             step = traverse_item(item)
             if step:
-                new_root_steps.append(step)
+                # SANITY CHECK: If step is NOT a container, it simply cannot have children.
+                # If Drag/Drop glitch caused children, flatten them into the main list.
+                if step.children and step.type not in [StepType.IF, StepType.UNTIL, StepType.AWAIT]:
+                    orphans = step.children
+                    step.children = [] # Clear invalid children
+                    new_root_steps.append(step)
+                    new_root_steps.extend(orphans) # Promote orphans to siblings
+                else:
+                    new_root_steps.append(step)
                 
         self.workflow.steps = new_root_steps
         self.has_unsaved_changes = True

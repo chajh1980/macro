@@ -222,8 +222,25 @@ class WorkflowCanvasWidget(QTreeWidget):
 
     def dragMoveEvent(self, event):
         if event.mimeData().hasFormat("application/vnd.antigravity.step-type"):
-            event.accept()
+             # External Drag from Toolbar
+             target = self.itemAt(event.position().toPoint())
+             if target:
+                 # If hovering over an item, check if it enables dropping (nesting)
+                 if not (target.flags() & Qt.ItemFlag.ItemIsDropEnabled):
+                     # Target prohibits nesting. 
+                     # QTreeWidget doesn't easily expose "drop indicator position" (On/Above/Below) here.
+                     # But usually we accept, and rely on dropEvent to handle logic?
+                     # No, if we accept, visual feedback implies drop ON is okay.
+                     # We should Ignore if squarely ON? 
+                     # For now, let's Accept but rely on dropEvent logic to redirect.
+                     event.accept()
+                 else:
+                     event.accept()
+             else:
+                 event.accept()
         else:
+            # Internal Drag (Reorder)
+            # Super implementation handles indicator drawing and flag checks
             super().dragMoveEvent(event)
             
     def dropEvent(self, event):
