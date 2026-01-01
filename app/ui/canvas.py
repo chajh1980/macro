@@ -27,9 +27,9 @@ class StepCardWidget(QWidget):
         self.layout.setSpacing(0)
         self.setLayout(self.layout)
         
-        # Check if AWAIT with child -> "Two Slot" Mode
+        # Check if AWAIT, IF, or UNTIL with child -> "Two Slot" Mode
         self.child_step = None
-        if step.type == StepType.AWAIT and step.children:
+        if step.type in [StepType.AWAIT, StepType.IF, StepType.UNTIL] and step.children:
             self.child_step = step.children[0]
             
         if self.child_step:
@@ -76,11 +76,19 @@ class StepCardWidget(QWidget):
         frame_parent.setLayout(layout_p)
         layout_p.setContentsMargins(5, 2, 5, 2)
         
-        lbl_idx = QLabel(f"#{index_str}")
-        lbl_idx.setStyleSheet("font-weight: bold; color: #555;")
-        lbl_name = QLabel("Await")
+        lbl_name = QLabel(self.step.name) # Use step name (If, Until, Await)
         lbl_name.setStyleSheet("font-weight: bold; color: #000;")
-        lbl_info = QLabel(f"{self.step.condition.retry_timeout_s}s")
+        
+        # Info label depends on type
+        info_text = ""
+        if self.step.type == StepType.AWAIT:
+             info_text = f"{self.step.condition.retry_timeout_s}s"
+        elif self.step.type == StepType.UNTIL:
+             info_text = "Loop"
+        elif self.step.type == StepType.IF:
+             info_text = "Check"
+             
+        lbl_info = QLabel(info_text)
         lbl_info.setStyleSheet("color: #666; font-size: 11px;")
         
         layout_p.addWidget(lbl_idx)
@@ -257,16 +265,12 @@ class WorkflowCanvasWidget(QTreeWidget):
                 
                 # Recursion for children
                 if step.children:
-                    # SPECIAL CASE: For AWAIT with 1 child, we visualised it inline in the parent widget.
-                    # Technically, we should still traverse to keep the tree structure valid for drag/drop?
-                    # BUT, if we show the child node, it will be duplicated visually.
-                    # So, if AWAIT has children, and we used Inline mode, we should NOT create a tree item for the first child?
-                    # Or create it but HIDDEN? Creating it hidden is safer for logic involving indices/traversal.
+                    # SPECIAL CASE: For AWAIT, IF, UNTIL with 1 child, we visualised it inline in the parent widget.
+                    # We hide the first child from the tree view to avoid duplication.
                     
-                    hide_first_child = (step.type == StepType.AWAIT and len(step.children) >= 1)
+                    hide_first_child = (step.type in [StepType.AWAIT, StepType.IF, StepType.UNTIL] and len(step.children) >= 1)
                     
-                    # Pass a custom flag or handle logic?
-                    # Let's just pass logic to child_builder
+                    # Pass logic to child_builder
                     build_tree(step.children, item, f"{idx_str}.", hide_first_child=hide_first_child)
                 else:
                     item.setExpanded(True)
@@ -301,10 +305,10 @@ class WorkflowCanvasWidget(QTreeWidget):
                 self.setItemWidget(item, 0, widget)
                 
                 # Detect inline mode for THIS step
-                is_await_inline = (step.type == StepType.AWAIT and len(step.children) >= 1)
+                is_container_inline = (step.type in [StepType.AWAIT, StepType.IF, StepType.UNTIL] and len(step.children) >= 1)
                 
                 if step.children:
-                    build_tree(step.children, item, f"{idx_str}.", hide_first_child=is_await_inline)
+                    build_tree(step.children, item, f"{idx_str}.", hide_first_child=is_container_inline)
                 
                 item.setExpanded(True) # Default expand
 
