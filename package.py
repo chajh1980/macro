@@ -15,10 +15,8 @@ def build():
         "--name=AutoMacro", # Application Name
         # "--windowed", # ENABLE CONSOLE FOR DEBUGGING (Segfault)
         "--console",
-        # "--onefile", # Single file executable (start slower, cleaner). directory based is often faster startup.
-        # Let's use directory based (--onedir) for faster startup, or onefile?
-        # Onefile is easier for distribution. Let's try --onefile.
-        "--onedir", 
+        "--onefile", # Single file executable (start slower, cleaner).
+        # "--onedir", # Directory based 
         
         # Main Entry Point
         "main.py",
