@@ -26,7 +26,7 @@ class StepPropertiesWidget(QWidget):
         
         self.name_edit = QLineEdit()
         self.command_combo = QComboBox()
-        self.command_combo.addItems(["Find Image", "Find Color", "Move Mouse", "Click Mouse", "Wait", "Loop/Goto"])
+        self.command_combo.addItems(["Find Image", "Find Color", "Move Mouse", "Click Mouse", "Wait", "Loop/Goto", "Await"])
         self.command_combo.setEnabled(False) # Prevent changing type after creation (User Request)
         
         top_layout.addRow("Step Name:", self.name_edit)
@@ -80,30 +80,12 @@ class StepPropertiesWidget(QWidget):
         row_img_offset.addWidget(QLabel("Y:"))
         row_img_offset.addWidget(self.img_offset_y)
         
-        # Retry Policy (Await) for Image
-        self.grp_retry_img = QGroupBox("Retry Policy (Await)")
-        self.grp_retry_img.setCheckable(True)
-        self.grp_retry_img.setChecked(False)
-        layout_retry = QFormLayout()
-        self.grp_retry_img.setLayout(layout_retry)
-        
-        self.retry_timeout = QDoubleSpinBox()
-        self.retry_timeout.setRange(0, 3600)
-        self.retry_timeout.setValue(5.0)
-        self.retry_interval = QSpinBox()
-        self.retry_interval.setRange(10, 10000)
-        self.retry_interval.setValue(500)
-        self.retry_interval.setSuffix(" ms")
-        
-        layout_retry.addRow("Timeout (s):", self.retry_timeout)
-        layout_retry.addRow("Check Interval:", self.retry_interval)
-        
         p_img_layout.addRow("Image Path:", row_img)
         p_img_layout.addRow("Preview:", self.img_preview)
         p_img_layout.addRow("Confidence:", self.img_confidence)
         p_img_layout.addRow("Search Area:", row_img_area)
         p_img_layout.addRow("Move Offset:", row_img_offset)
-        p_img_layout.addRow(self.grp_retry_img) # Add Retry Group
+        # Removed embedded Retry Group as Await is now a separate Step Type
         
         self.stack.addWidget(self.page_image)
         
@@ -145,29 +127,11 @@ class StepPropertiesWidget(QWidget):
         row_color_area.addWidget(self.color_watch_area_edit)
         row_color_area.addWidget(self.color_set_area_btn)
         
-        # Retry Policy (Await) for Color
-        self.grp_retry_color = QGroupBox("Retry Policy (Await)")
-        self.grp_retry_color.setCheckable(True)
-        self.grp_retry_color.setChecked(False)
-        layout_retry_color = QFormLayout()
-        self.grp_retry_color.setLayout(layout_retry_color)
-        
-        self.retry_timeout_color = QDoubleSpinBox()
-        self.retry_timeout_color.setRange(0, 3600)
-        self.retry_timeout_color.setValue(5.0)
-        self.retry_interval_color = QSpinBox()
-        self.retry_interval_color.setRange(10, 10000)
-        self.retry_interval_color.setValue(500)
-        self.retry_interval_color.setSuffix(" ms")
-        
-        layout_retry_color.addRow("Timeout (s):", self.retry_timeout_color)
-        layout_retry_color.addRow("Check Interval:", self.retry_interval_color)
-        
         p_color_layout.addRow("Target Color:", row_color_target)
         p_color_layout.addRow("Tolerance:", self.color_tolerance)
         p_color_layout.addRow("Match Index:", self.color_match_index)
         p_color_layout.addRow("Search Area:", row_color_area)
-        p_color_layout.addRow(self.grp_retry_color) # Add Retry Group
+        # Removed embedded Retry Group
         
         self.stack.addWidget(self.page_color)
         
@@ -230,6 +194,25 @@ class StepPropertiesWidget(QWidget):
         p_goto_layout.addRow("Jump to Step #:", self.goto_spin)
         
         self.stack.addWidget(self.page_goto)
+
+        # 6. Await Page (New Container Step)
+        self.page_await = QWidget()
+        p_await_layout = QFormLayout()
+        self.page_await.setLayout(p_await_layout)
+        
+        self.await_timeout = QDoubleSpinBox()
+        self.await_timeout.setRange(0, 3600)
+        self.await_timeout.setValue(10.0)
+        self.await_interval = QSpinBox()
+        self.await_interval.setRange(10, 10000)
+        self.await_interval.setValue(500)
+        self.await_interval.setSuffix(" ms")
+        
+        p_await_layout.addRow(QLabel("Wait for child condition to be true."))
+        p_await_layout.addRow("Timeout (s):", self.await_timeout)
+        p_await_layout.addRow("Check Interval:", self.await_interval)
+        
+        self.stack.addWidget(self.page_await)
         
         # --- Bottom: Tools ---
         self.layout.addStretch()
@@ -275,13 +258,9 @@ class StepPropertiesWidget(QWidget):
         
         # Retry Policy Signals
         # Retry Policy Signals
-        self.retry_timeout.valueChanged.connect(self._sync_data)
-        self.retry_interval.valueChanged.connect(self._sync_data)
-        self.grp_retry_img.toggled.connect(self._sync_data)
-        
-        self.retry_timeout_color.valueChanged.connect(self._sync_data)
-        self.retry_interval_color.valueChanged.connect(self._sync_data)
-        self.grp_retry_color.toggled.connect(self._sync_data)
+        # Trigger Await Update
+        self.await_timeout.valueChanged.connect(self._sync_data)
+        self.await_interval.valueChanged.connect(self._sync_data)
 
     def _on_combo_changed(self, index):
         self.stack.setCurrentIndex(index)
@@ -325,6 +304,8 @@ class StepPropertiesWidget(QWidget):
                      mode_idx = 2 # Move Logic check
         elif step.condition.type == ConditionType.COLOR:
             mode_idx = 1
+        elif step.type == StepType.AWAIT:
+            mode_idx = 6
         elif step.condition.type == ConditionType.IMAGE:
             mode_idx = 0
             
@@ -340,31 +321,9 @@ class StepPropertiesWidget(QWidget):
              self.img_watch_area_edit.setText(str(step.condition.watch_area))
         else:
              self.img_full_window_cb.setChecked(True)
-        # Retry Image
-        if step.condition.retry_timeout_s is not None:
-             self.grp_retry_img.setChecked(True)
-             self.retry_timeout.setValue(step.condition.retry_timeout_s)
-             self.retry_interval.setValue(step.condition.retry_interval_ms or 500)
-        else:
-             self.grp_retry_img.setChecked(False)
-             
-        # 1. Color
-        self.color_val_edit.setText(step.condition.target_color or "#FFFFFF")
-        self.color_tolerance.setValue(step.condition.color_tolerance)
-        self.color_match_index.setValue(step.condition.match_index)
-        if step.condition.watch_area and step.condition.type == ConditionType.COLOR:
-             self.color_full_window_cb.setChecked(False)
-             self.color_watch_area_edit.setText(str(step.condition.watch_area))
-        else:
-             self.color_full_window_cb.setChecked(True)
-        self._update_color_preview(step.condition.target_color or "#FFFFFF")
-        # Retry Color
-        if step.condition.retry_timeout_s is not None:
-             self.grp_retry_color.setChecked(True)
-             self.retry_timeout_color.setValue(step.condition.retry_timeout_s)
-             self.retry_interval_color.setValue(step.condition.retry_interval_ms or 500)
-        else:
-             self.grp_retry_color.setChecked(False)
+        # Retry Color Removed
+        
+        # 2. Offsets (Image action uses Move params too)
         
         # 2. Offsets (Image action uses Move params too)
         # ... existing ...
@@ -383,14 +342,15 @@ class StepPropertiesWidget(QWidget):
         # 5. Goto
         self.goto_spin.setValue(step.action.goto_step_index or 1)
         
+        # 6. Await
+        self.await_timeout.setValue(step.condition.retry_timeout_s or 10.0)
+        self.await_interval.setValue(step.condition.retry_interval_ms or 500)
+
         # Preview
         if mode_idx == 0:
             self._update_preview(step.condition.target_image_path)
             
-        # Hide Retry Policy for IF/UNTIL (Flow Control should be instant check usually)
-        is_flow_control = step.type in (StepType.IF, StepType.UNTIL)
-        self.grp_retry_img.setVisible(not is_flow_control)
-        self.grp_retry_color.setVisible(not is_flow_control)
+        # Hide Retry Policy - No longer needed as Await is separate
         
         self.blockSignals(False)
         
@@ -407,14 +367,7 @@ class StepPropertiesWidget(QWidget):
             self.current_step.condition.confidence = self.img_confidence.value()
             self.current_step.action.target_x = self.img_offset_x.value()
             self.current_step.action.target_y = self.img_offset_y.value()
-            # Retry
-            # Retry
-            if self.grp_retry_img.isChecked():
-                self.current_step.condition.retry_timeout_s = self.retry_timeout.value()
-                self.current_step.condition.retry_interval_ms = self.retry_interval.value()
-            else:
-                self.current_step.condition.retry_timeout_s = None
-                self.current_step.condition.retry_interval_ms = None
+            # Retry logic removed from here
             
             try:
                 txt = self.img_watch_area_edit.text()
@@ -427,14 +380,7 @@ class StepPropertiesWidget(QWidget):
             self.current_step.condition.target_color = self.color_val_edit.text()
             self.current_step.condition.color_tolerance = self.color_tolerance.value()
             self.current_step.condition.match_index = self.color_match_index.value()
-            # Retry
-            # Retry
-            if self.grp_retry_color.isChecked():
-                self.current_step.condition.retry_timeout_s = self.retry_timeout_color.value()
-                self.current_step.condition.retry_interval_ms = self.retry_interval_color.value()
-            else:
-                self.current_step.condition.retry_timeout_s = None
-                self.current_step.condition.retry_interval_ms = None
+            # Retry logic removed
             
             try:
                 txt = self.color_watch_area_edit.text()
@@ -462,7 +408,15 @@ class StepPropertiesWidget(QWidget):
             self.current_step.condition.type = ConditionType.TIME
             self.current_step.condition.wait_time_s = 0
             self.current_step.action.type = ActionType.GOTO
+            self.current_step.action.type = ActionType.GOTO
             self.current_step.action.goto_step_index = self.goto_spin.value()
+            
+        elif idx == 6: # Await
+            self.current_step.type = StepType.AWAIT
+            # Logic: Container step, condition parameters used for policy
+            self.current_step.condition.type = ConditionType.TIME # Placeholder, uses children
+            self.current_step.condition.retry_timeout_s = self.await_timeout.value()
+            self.current_step.condition.retry_interval_ms = self.await_interval.value()
             
         self.step_changed.emit(self.current_step)
 
