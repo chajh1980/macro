@@ -3,7 +3,7 @@ import logging
 import pyautogui
 from typing import Optional
 from PyQt6.QtCore import QObject, pyqtSignal
-from app.core.models import Workflow, Step, ConditionType, ActionType, ImageMatchMode
+from app.core.models import Workflow, Step, ConditionType, ActionType, ImageMatchMode, StepType
 from app.core.image_proc import find_image_on_screen, sort_matches, deduplicate_matches
 # from app.core.ocr import find_text_on_screen # Lazy loaded
 from app.utils.screen_utils import physical_to_logical
