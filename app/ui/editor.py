@@ -418,12 +418,13 @@ class WorkflowEditor(QMainWindow):
                     target_x = center_x + off_x
                     target_y = center_y + off_y
                     
-                    pyautogui.moveTo(target_x, target_y)
+                    from PyQt6.QtGui import QCursor
+                    QCursor.setPos(target_x, target_y)
                     
                     # Use a non-modal message box or just wait?
                     msg = QMessageBox(self)
                     msg.setWindowTitle("Test Result")
-                    msg.setText(f"Image Found!\nMoved mouse to ({target_x}, {target_y}).")
+                    msg.setText(f"Image Found!\nMoved mouse to ({target_x}, {target_y}) using logical coords.")
                     msg.setIcon(QMessageBox.Icon.Information)
                     msg.setStandardButtons(QMessageBox.StandardButton.Ok)
                     msg.exec()
@@ -480,11 +481,12 @@ class WorkflowEditor(QMainWindow):
                      center_x = x + w // 2
                      center_y = y + h // 2
                      
-                     pyautogui.moveTo(center_x, center_y)
+                     from PyQt6.QtGui import QCursor
+                     QCursor.setPos(center_x, center_y)
                      
                      msg = QMessageBox(self)
                      msg.setWindowTitle("Test Result")
-                     msg.setText(f"Color Found (Match #{idx+1})!\nMoved mouse to ({center_x}, {center_y}).")
+                     msg.setText(f"Color Found (Match #{idx+1})!\nMoved mouse to ({center_x}, {center_y}) using logical coords.")
                      msg.setIcon(QMessageBox.Icon.Information)
                      msg.setStandardButtons(QMessageBox.StandardButton.Ok)
                      msg.exec()
