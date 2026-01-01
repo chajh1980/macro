@@ -7,6 +7,8 @@ class Overlay(QWidget):
     captured = pyqtSignal(QRect) # For region selection
     clicked = pyqtSignal(int, int) # For coordinate selection
     color_picked = pyqtSignal(str) # Hex string
+    canceled = pyqtSignal() # New signal for cancellation
+
     
     def __init__(self, mode="region", highlight_rect: QRect = None): 
         # mode: "region", "point", "highlight", "color"
@@ -382,4 +384,5 @@ class Overlay(QWidget):
             
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:
+            self.canceled.emit()
             self.close()

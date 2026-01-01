@@ -321,6 +321,7 @@ class WorkflowEditor(QMainWindow):
         self.hide() # Hide editor to capture screen underneath
         self.overlay = Overlay(mode="region")
         self.overlay.captured.connect(self._on_image_captured)
+        self.overlay.canceled.connect(self.show) # Restore on cancel
         self.overlay.show()
         
     def _on_image_captured(self, rect):
@@ -362,6 +363,7 @@ class WorkflowEditor(QMainWindow):
         self.hide()
         self.overlay = Overlay(mode="region")
         self.overlay.captured.connect(lambda rect: self._on_area_captured(rect, for_image=for_image))
+        self.overlay.canceled.connect(self.show)
         self.overlay.show()
 
     def _on_area_captured(self, rect, for_image=False):
@@ -378,6 +380,7 @@ class WorkflowEditor(QMainWindow):
         self.hide()
         self.overlay = Overlay(mode="point")
         self.overlay.clicked.connect(self._on_point_picked)
+        self.overlay.canceled.connect(self.show)
         self.overlay.show()
 
     def _on_point_picked(self, x, y):
@@ -394,6 +397,7 @@ class WorkflowEditor(QMainWindow):
         self.hide()
         self.overlay = Overlay(mode="color")
         self.overlay.color_picked.connect(self._on_color_picked)
+        self.overlay.canceled.connect(self.show)
         self.overlay.show()
         
     def _on_color_picked(self, hex_color):
