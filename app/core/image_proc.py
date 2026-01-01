@@ -186,6 +186,30 @@ def find_color_on_screen(
                     x += int(region[0] * scale)
                     y += int(region[1] * scale)
                 matches.append((x, y, w, h))
+        
+        # DEBUG: Draw matches on a result image
+        result_img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR).copy()
+        for (mx, my, mw, mh) in matches:
+            # Note: matches are in GLOBAL coordinates if region is used.
+            # But we want to draw on the LOCAL captured image 'img'.
+            # We need to reverse the offset for drawing.
+            # Wait, img is the captured screenshot (local to region).
+            # The 'x, y' from cv2.boundingRect are local.
+            # The 'matches' list has global coordinates.
+            # Let's use the local 'x, y' from the loop above if we tracked them, 
+            # or just subtract the offset from 'mx, my'.
+            
+            draw_x, draw_y = mx, my
+            if region:
+                 from app.utils.screen_utils import get_screen_scale
+                 scale = get_screen_scale()
+                 draw_x -= int(region[0] * scale)
+                 draw_y -= int(region[1] * scale)
+            
+            cv2.rectangle(result_img, (draw_x, draw_y), (draw_x + mw, draw_y + mh), (0, 255, 0), 2)
+
+        result_path = os.path.join(get_app_dir(), "debug_color_result.png")
+        cv2.imwrite(result_path, result_img)
                 
         # Sort by visual order (top-left)
         matches = sort_matches(matches)
