@@ -266,6 +266,13 @@ class WorkflowCanvasWidget(QTreeWidget):
                 widget.step_selected.connect(self.step_clicked.emit) # Forward signal
                 self.setItemWidget(item, 0, widget)
                 
+                # Configure Drag/Drop Flags
+                # Only Allow Drop (Nesting) on Containers
+                if step.type in [StepType.IF, StepType.UNTIL, StepType.AWAIT]:
+                    item.setFlags(item.flags() | Qt.ItemFlag.ItemIsDropEnabled)
+                else:
+                    item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsDropEnabled)
+                
                 # Recursion for children
                 if step.children:
                     # SPECIAL CASE: For AWAIT, IF, UNTIL with 1 child, we visualised it inline in the parent widget.
@@ -306,6 +313,12 @@ class WorkflowCanvasWidget(QTreeWidget):
                 widget = StepCardWidget(step, idx_str)
                 widget.step_selected.connect(self.step_clicked.emit)
                 self.setItemWidget(item, 0, widget)
+                
+                # Configure Flags
+                if step.type in [StepType.IF, StepType.UNTIL, StepType.AWAIT]:
+                    item.setFlags(item.flags() | Qt.ItemFlag.ItemIsDropEnabled)
+                else:
+                    item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsDropEnabled)
                 
                 # Detect inline mode for THIS step
                 is_container_inline = (step.type in [StepType.AWAIT, StepType.IF, StepType.UNTIL] and len(step.children) >= 1)
