@@ -166,6 +166,10 @@ def find_color_on_screen(
         
         mask = cv2.inRange(img, lower, upper)
         
+        # DEBUG: Save mask
+        mask_path = os.path.join(get_app_dir(), "debug_color_mask.png")
+        cv2.imwrite(mask_path, mask)
+        
         # 4. Find Contours (Connected Components)
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         print(f"DEBUG_COLOR: Found {len(contours)} contours")
@@ -173,8 +177,8 @@ def find_color_on_screen(
         matches = []
         for cnt in contours:
             x, y, w, h = cv2.boundingRect(cnt)
-            # Filter tiny noise?
-            if w > 0 and h > 0:
+            # Filter tiny noise (Require at least 5px dimensions)
+            if w >= 5 and h >= 5:
                 # Add region offset if needed
                 if region:
                     from app.utils.screen_utils import get_screen_scale
