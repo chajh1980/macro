@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QSplitter, QMessageBox, QCheckBox, QApplication
 )
 from PyQt6.QtCore import Qt, QRect
-from app.ui.library import ComponentLibraryWidget
+from app.ui.toolbar import ComponentToolbar
 from app.ui.canvas import WorkflowCanvasWidget
 from app.ui.inspector import PropertyInspectorWidget
 from app.ui.overlay import Overlay
@@ -21,28 +21,32 @@ class WorkflowEditor(QMainWindow):
         self.has_unsaved_changes = False
         
         self.setWindowTitle(f"Editing: {workflow_name}")
-        self.resize(1200, 800)
+        self.resize(1000, 700) # Resized per user request (was 1200x800)
         
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout()
+        main_layout = QVBoxLayout() # Main layout is now Vertical
         central_widget.setLayout(main_layout)
         
-        # 3-Pane Layout
+        # 1. Top Toolbar (New)
+        self.toolbar = ComponentToolbar()
+        self.toolbar.setFixedHeight(100)
+        main_layout.addWidget(self.toolbar)
+        
+        # 2. Splitter (Canvas + Inspector)
         splitter = QSplitter(Qt.Orientation.Horizontal)
         
-        # 1. Library (Left)
-        self.library = ComponentLibraryWidget()
-        self.library.setFixedWidth(250)
-        splitter.addWidget(self.library)
-        
-        # 2. Canvas (Center)
+        # Canvas (Left/Center)
         self.canvas = WorkflowCanvasWidget()
         splitter.addWidget(self.canvas)
         
-        # 3. Inspector (Right)
+        # Inspector (Right)
         self.inspector = PropertyInspectorWidget()
         self.inspector.setFixedWidth(350)
+        self.inspector.set_workflow_dir(os.path.join(get_workflows_dir(), self.workflow_name))
+        splitter.addWidget(self.inspector)
+        
+        main_layout.addWidget(splitter)
         self.inspector.set_workflow_dir(os.path.join(get_workflows_dir(), self.workflow_name))
         splitter.addWidget(self.inspector)
         
