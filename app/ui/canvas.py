@@ -6,15 +6,38 @@ from app.core.models import Step, Condition, Action, StepType, ConditionType, Ac
 class ClickableFrame(QFrame):
     clicked = pyqtSignal()
     
-    def __init__(self, parent=None):
+    def __init__(self, step_id, parent=None):
         super().__init__(parent)
+        self.step_id = step_id
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        
+        self.drag_start_pos = None
+
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton:
+            self.drag_start_pos = event.pos()
+        super().mousePressEvent(event) # Keep grab
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if self.drag_start_pos:
+            from PyQt6.QtWidgets import QApplication
+            if (event.pos() - self.drag_start_pos).manhattanLength() > QApplication.startDragDistance():
+                # Start Drag
+                drag = QDrag(self)
+                mime = QMimeData()
+                # Format: "move:{step_id}"
+                mime.setText(f"move:{self.step_id}")
+                mime.setData("application/vnd.antigravity.step-type", f"move:{self.step_id}".encode())
+                drag.setMimeData(mime)
+                drag.exec(Qt.DropAction.MoveAction)
+                self.drag_start_pos = None # Reset
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        if self.drag_start_pos:
+            # If we reached here without dragging, it's a click
             self.clicked.emit()
-        else:
-            super().mousePressEvent(event)
+            self.drag_start_pos = None
+        super().mouseReleaseEvent(event)
 
 class StepCardWidget(QWidget):
     step_selected = pyqtSignal(Step) # Signal to notify canvas/editor of specific selection
@@ -68,7 +91,7 @@ class StepCardWidget(QWidget):
 
     def _init_composite_ui(self, index_str):
         # Frame 1: Parent (Await)
-        frame_parent = ClickableFrame()
+        frame_parent = ClickableFrame(self.step.id)
         frame_parent.setStyleSheet("QFrame { background-color: #f0f0f0; border-radius: 4px; border: 1px solid #ccc; } QFrame:hover { background-color: #e0e0e0; }")
         frame_parent.clicked.connect(lambda: self.step_selected.emit(self.step))
         
@@ -99,7 +122,7 @@ class StepCardWidget(QWidget):
         layout_p.addWidget(lbl_info)
         
         # Frame 2: Child (e.g. Find Image)
-        frame_child = ClickableFrame()
+        frame_child = ClickableFrame(self.child_step.id)
         frame_child.setStyleSheet("QFrame { background-color: #e6f3ff; border-radius: 4px; border: 1px solid #0066cc; } QFrame:hover { background-color: #d0e8ff; }")
         frame_child.clicked.connect(lambda: self.step_selected.emit(self.child_step))
         

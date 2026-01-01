@@ -12,6 +12,7 @@ from app.ui.overlay import Overlay
 from app.core.models import Workflow, Step, ConditionType, ActionType, Condition, Action, StepType
 from app.utils.common import get_workflows_dir
 from app.utils.screen_utils import get_screen_scale
+import uuid
 
 class WorkflowEditor(QMainWindow):
     def __init__(self, workflow_name: str, on_close):
@@ -127,104 +128,127 @@ class WorkflowEditor(QMainWindow):
     def _refresh_canvas(self):
         self.canvas.update_steps(self.workflow.steps)
 
-    def _on_step_dropped(self, category, type_code, target_item=None, indicator_pos=3):
-        # ... (Step creation logic unchanged) ...
-        # 1. Create New Step
-        new_step = Step(
-            id=str(len(self.workflow.steps) + 1), # Temporary ID generation approach
-            name=f"New Step {len(self.workflow.steps) + 1}",
-            condition=Condition(type=ConditionType.TIME, wait_time_s=0),
-            action=Action(type=ActionType.NONE)
-        )
-        
-        # 2. Configure Type
+    def _find_step_by_id(self, step_id):
+        # Helper to traverse and find
+        def traverse(steps, parent=None):
+            for s in steps:
+                if s.id == step_id:
+                    return s, parent
+                if s.children:
+                    res, p = traverse(s.children, s)
+                    if res: return res, p
+            return None, None
+        return traverse(self.workflow.steps)
+
+    def _configure_new_step(self, step, category, type_code):
         if category == "Condition":
             if type_code == "image":
-                new_step.condition.type = ConditionType.IMAGE
-                new_step.action.type = ActionType.MOVE
-                new_step.name = "Find Image"
+                step.condition.type = ConditionType.IMAGE
+                step.action.type = ActionType.MOVE
+                step.name = "Find Image"
             elif type_code == "wait":
-                new_step.condition.type = ConditionType.TIME
-                new_step.condition.wait_time_s = 1.0
-                new_step.name = "Wait"
+                step.condition.type = ConditionType.TIME
+                step.condition.wait_time_s = 1.0
+                step.name = "Wait"
             elif type_code == "color":
-                new_step.condition.type = ConditionType.COLOR
-                new_step.action.type = ActionType.MOVE
-                new_step.name = "Find Color"
-                
+                step.condition.type = ConditionType.COLOR
+                step.action.type = ActionType.MOVE
+                step.name = "Find Color"
         elif category == "Action":
             if type_code == "click":
-                new_step.condition.type = ConditionType.TIME
-                new_step.condition.wait_time_s = 0
-                new_step.action.type = ActionType.CLICK
-                new_step.name = "Click Mouse"
+                step.condition.type = ConditionType.TIME
+                step.condition.wait_time_s = 0
+                step.action.type = ActionType.CLICK
+                step.name = "Click Mouse"
             elif type_code == "move":
-                new_step.condition.type = ConditionType.TIME
-                new_step.condition.wait_time_s = 0
-                new_step.action.type = ActionType.MOVE
-                new_step.name = "Move Mouse"
+                step.condition.type = ConditionType.TIME
+                step.condition.wait_time_s = 0
+                step.action.type = ActionType.MOVE
+                step.name = "Move Mouse"
             elif type_code == "goto":
-                new_step.condition.type = ConditionType.TIME
-                new_step.condition.wait_time_s = 0
-                new_step.action.type = ActionType.GOTO
-                new_step.action.goto_step_index = 1
-                new_step.name = "Goto Step"
-                
-        elif category == "Control": # New Group
+                step.condition.type = ConditionType.TIME
+                step.condition.wait_time_s = 0
+                step.action.type = ActionType.GOTO
+                step.action.goto_step_index = 1
+                step.name = "Goto Step"
+        elif category == "Control":
             if type_code == "if":
-                new_step.type = StepType.IF
-                new_step.name = "If Condition"
-                new_step.condition.type = ConditionType.IMAGE # Default condition type for If
+                step.type = StepType.IF
+                step.name = "If Condition"
+                step.condition.type = ConditionType.IMAGE
             elif type_code == "until":
-                new_step.type = StepType.UNTIL
-                new_step.name = "Until Loop"
-                new_step.condition.type = ConditionType.IMAGE # Default condition type for Until
+                step.type = StepType.UNTIL
+                step.name = "Until Loop"
+                step.condition.type = ConditionType.IMAGE
             elif type_code == "await":
-                new_step.type = StepType.AWAIT
-                new_step.name = "Await"
-                new_step.condition.type = ConditionType.TIME # Default, specific policy set in properties
+                step.type = StepType.AWAIT
+                step.name = "Await"
+                step.condition.type = ConditionType.TIME
+
+    def _on_step_dropped(self, category, type_code, target_item=None, indicator_pos=3):
+        new_step = None
         
-        # 3. Insert Logic (Handling Nesting and Order)
-        # indicator_pos: 0=OnItem, 1=AboveItem, 2=BelowItem, 3=OnViewport
+        if category == "move":
+            step_id = type_code
+            found_step, found_parent = self._find_step_by_id(step_id)
+            if found_step:
+                new_step = found_step
+                # Remove from old location
+                if found_parent:
+                    found_parent.children.remove(found_step)
+                else:
+                    # Might raise error if list modified via tree reorder concurrently?
+                    # But _on_reordered shouldn't be called for our custom drop.
+                    try:
+                        self.workflow.steps.remove(found_step)
+                    except ValueError: pass
+        else:
+            new_step = Step(
+                id=str(uuid.uuid4()), 
+                name=f"Step",
+                condition=Condition(type=ConditionType.TIME, wait_time_s=0),
+                action=Action(type=ActionType.NONE)
+            )
+            self._configure_new_step(new_step, category, type_code)
+            
+        if not new_step: return
         
+        # Insert Logic
         inserted = False
-        
         if target_item:
             target_step = target_item.data(0, Qt.ItemDataRole.UserRole)
-            
-            # Find parent of target (to know where to insert if siblings)
             parent_item = target_item.parent()
             parent_step = parent_item.data(0, Qt.ItemDataRole.UserRole) if parent_item else None
-            # Target List: If parent exists, use parent.children. Else use self.workflow.steps.
+            # Target List
             target_list = parent_step.children if parent_step else self.workflow.steps
             
-            # Find index of target_step in target_list
-            # Note: target_step object must be in target_list
             try:
                 target_idx = target_list.index(target_step)
             except ValueError:
-                target_idx = len(target_list) # Should not happen unless sync issue
-            
-            if indicator_pos == 0: # On Item -> Try Nesting
-                if target_step and target_step.type in [StepType.IF, StepType.UNTIL, StepType.AWAIT]:
+                target_idx = len(target_list)
+
+            if indicator_pos == 0: # On Item
+                # If target is new_step (dropped on self), ignore
+                if target_step == new_step: return
+
+                if target_step.type in [StepType.IF, StepType.UNTIL, StepType.AWAIT]:
                     target_step.children.append(new_step)
                     inserted = True
                 else:
-                    # Dropped ON non-container -> Treat as Insert After (or Before? Default to After)
                     target_list.insert(target_idx + 1, new_step)
                     inserted = True
-                    
-            elif indicator_pos == 1: # Above Item
+            elif indicator_pos == 1: # Above
                 target_list.insert(target_idx, new_step)
                 inserted = True
-                
-            elif indicator_pos == 2: # Below Item
+            elif indicator_pos == 2: # Below
                 target_list.insert(target_idx + 1, new_step)
                 inserted = True
-                
+        
         if not inserted:
-            # Append to root
             self.workflow.steps.append(new_step)
+
+        self.has_unsaved_changes = True
+        self._refresh_canvas()
 
         self.has_unsaved_changes = True
         self._refresh_canvas()
