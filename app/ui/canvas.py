@@ -76,6 +76,9 @@ class StepCardWidget(QWidget):
         frame_parent.setLayout(layout_p)
         layout_p.setContentsMargins(5, 2, 5, 2)
         
+        lbl_idx = QLabel(f"#{index_str}")
+        lbl_idx.setStyleSheet("font-weight: bold; color: #555;")
+        
         lbl_name = QLabel(self.step.name) # Use step name (If, Until, Await)
         lbl_name.setStyleSheet("font-weight: bold; color: #000;")
         
