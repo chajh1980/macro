@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QWidget, QRubberBand, QApplication
 from PyQt6.QtCore import Qt, QRect, pyqtSignal, QTimer
 from PyQt6.QtGui import QPainter, QColor, QPen
+import pyautogui
 from app.utils.screen_utils import get_screen_scale
 
 class Overlay(QWidget):
@@ -205,7 +206,9 @@ class Overlay(QWidget):
                  
                  # Boundary check
                  if 0 <= px < self.screen_grab.width and 0 <= py < self.screen_grab.height:
-                     r, g, b = self.screen_grab.getpixel((px, py))
+                     # Force RGBA -> RGB handling
+                     pixel = self.screen_grab.getpixel((px, py))
+                     r, g, b = pixel[:3]
                      hex_color = f"#{r:02x}{g:02x}{b:02x}"
                      self.color_picked.emit(hex_color)
                  
