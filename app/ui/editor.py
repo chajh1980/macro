@@ -123,14 +123,16 @@ class WorkflowEditor(QMainWindow):
     def _refresh_canvas(self):
         self.canvas.update_steps(self.workflow.steps)
 
-    def _on_step_dropped(self, category, type_code):
+    def _on_step_dropped(self, category, type_code, target_item=None):
+        # 1. Create New Step
         new_step = Step(
-            id=str(len(self.workflow.steps) + 1),
+            id=str(len(self.workflow.steps) + 1), # Temporary ID generation approach
             name=f"New Step {len(self.workflow.steps) + 1}",
             condition=Condition(type=ConditionType.TIME, wait_time_s=0),
             action=Action(type=ActionType.NONE)
         )
         
+        # 2. Configure Type
         if category == "Condition":
             if type_code == "image":
                 new_step.condition.type = ConditionType.IMAGE
@@ -162,65 +164,85 @@ class WorkflowEditor(QMainWindow):
                 new_step.action.type = ActionType.GOTO
                 new_step.action.goto_step_index = 1
                 new_step.name = "Goto Step"
+                
+        elif category == "Control": # New Group
+            if type_code == "if":
+                new_step.type = StepType.IF
+                new_step.name = "If Condition"
+                new_step.condition.type = ConditionType.IMAGE # Default condition type for If
+            elif type_code == "until":
+                new_step.type = StepType.UNTIL
+                new_step.name = "Until Loop"
+                new_step.condition.type = ConditionType.IMAGE # Default condition type for Until
         
-        self.workflow.steps.append(new_step)
+        # 3. Insert Logic (Handling Nesting)
+        if target_item:
+            # Dropped ON another item -> Add as child IF container
+            parent_step = target_item.data(0, Qt.ItemDataRole.UserRole)
+            if parent_step and parent_step.type in [StepType.IF, StepType.UNTIL]:
+                parent_step.children.append(new_step)
+            else:
+                # Dropped on leaf -> Add as sibling AFTER? Or just append to root for simplicity now?
+                # For Phase 1 of Tree: Just append to root unless explicitly dropped into container.
+                # Actually, QTreeWidget drops usually mean "insert between". 
+                # But our signal implementation just passes 'target_item'.
+                # Let's simplify: If dropped on container, add as child. Else append to root.
+                self.workflow.steps.append(new_step)
+        else:
+             self.workflow.steps.append(new_step)
+
         self.has_unsaved_changes = True
         self._refresh_canvas()
         
-        last_row = self.canvas.count() - 1
-        self.canvas.setCurrentRow(last_row)
-        self._on_step_selected(self.canvas.item(last_row))
-
+        # Select new item (Naive approach finding by object identity logic or re-scan)
+        # For now, just expand all
+        self.canvas.expandAll()
+        
     def _on_step_selected(self, item):
-        row = self.canvas.row(item)
-        if 0 <= row < len(self.workflow.steps):
-            step = self.workflow.steps[row]
+        if not item:
+            self.inspector.show_workflow_props(self.workflow)
+            return
+            
+        step = item.data(0, Qt.ItemDataRole.UserRole)
+        if step:
             self.inspector.show_step_props(step)
         else:
             self.inspector.show_workflow_props(self.workflow)
             
     def _on_step_changed_from_inspector(self, step):
-        # Update canvas item text to reflect new name/props
         self.has_unsaved_changes = True
         self._refresh_canvas_item()
 
     def _on_reordered(self):
-        # The canvas list has been reordered visually.
-        # We need to sync self.workflow.steps to match the new order.
-        # Since StepCardWidget holds the step object, we can reconstruct the list.
+        # Reconstruct workflow structure from Tree Widget
         
-        new_steps = []
-        for i in range(self.canvas.count()):
-            item = self.canvas.item(i)
-            widget = self.canvas.itemWidget(item)
-            if hasattr(widget, 'idx_label'): # It's a StepCardWidget
-                # Wait, StepCardWidget is initialized with a Step, 
-                # but we need to retrieve the Step object that was associated with this item.
-                # Actually, in update_steps we did: widget = StepCardWidget(step, i+1)
-                # But we didn't store step on the widget itself as a public prop, 
-                # though it might be in closure or we can add it.
-                # BETTER: Store step in UserRole of the QListWidgetItem.
-                pass
+        def safe_get_step(item):
+            return item.data(0, Qt.ItemDataRole.UserRole)
             
-        # Re-approach: In update_steps, store step in Item UserRole.
-        # Then here we iterate items and rebuild list.
-        new_steps = []
-        for i in range(self.canvas.count()):
-            item = self.canvas.item(i)
-            step = item.data(Qt.ItemDataRole.UserRole)
+        def traverse_item(item):
+            # Returns step with updated children
+            step = safe_get_step(item)
+            new_children = []
+            for i in range(item.childCount()):
+                child_item = item.child(i)
+                child_step = traverse_item(child_item)
+                if child_step:
+                    new_children.append(child_step)
+            step.children = new_children
+            return step
+            
+        new_root_steps = []
+        for i in range(self.canvas.topLevelItemCount()):
+            item = self.canvas.topLevelItem(i)
+            step = traverse_item(item)
             if step:
-                new_steps.append(step)
-        
-        self.workflow.steps = new_steps
+                new_root_steps.append(step)
+                
+        self.workflow.steps = new_root_steps
         self.has_unsaved_changes = True
         
         # Refresh indices in UI
         self._refresh_canvas()
-        
-        # Determine which item is selected and show it
-        row = self.canvas.currentRow()
-        if row >= 0:
-             self._on_step_selected(self.canvas.item(row))
 
     def _delete_current_step(self):
         row = self.canvas.currentRow()

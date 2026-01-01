@@ -88,6 +88,8 @@ class ComponentToolbar(QWidget):
         grp_etc.setLayout(layout_etc)
         
         layout_etc.addWidget(DraggableButton("Goto", "Action", "goto"))
+        layout_etc.addWidget(DraggableButton("If", "Control", "if"))
+        layout_etc.addWidget(DraggableButton("Until", "Control", "until"))
         
         layout.addWidget(grp_etc)
         

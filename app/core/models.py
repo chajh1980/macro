@@ -6,6 +6,8 @@ class StepType(str, Enum):
     GENERAL = "GENERAL"
     CONDITION = "CONDITION"
     LOOP = "LOOP"
+    IF = "IF"
+    UNTIL = "UNTIL"
 
 class ConditionType(str, Enum):
     IMAGE = "IMAGE"
@@ -44,6 +46,10 @@ class Condition(BaseModel):
     
     # Time specific
     wait_time_s: float = 0.0
+    
+    # Await / Retry Policy (for If/Until/Wait)
+    retry_timeout_s: float = 5.0 # Total max time to retry
+    retry_interval_ms: int = 500   # Interval between checks
 
 class Action(BaseModel):
     type: ActionType
@@ -60,6 +66,7 @@ class Step(BaseModel):
     type: StepType = StepType.GENERAL
     condition: Condition
     action: Action
+    children: List['Step'] = Field(default_factory=list) # Nested steps for If/Until
     next_step_index: Optional[int] = None # Implicitly next, but can be explicit
     step_interval_ms: int = 5
 
