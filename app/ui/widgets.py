@@ -203,15 +203,15 @@ class StepPropertiesWidget(QWidget):
         
         # Determine Index
         idx = 0
-        if step.condition.type == ConditionType.IMAGE: idx = 0
+        if step.type == StepType.AWAIT: idx = 6
+        elif step.type == StepType.IF: idx = 6 
+        elif step.type == StepType.UNTIL: idx = 6
+        elif step.condition.type == ConditionType.IMAGE: idx = 0
         elif step.condition.type == ConditionType.COLOR: idx = 1
         elif step.action.type == ActionType.MOVE and step.condition.type == ConditionType.TIME: idx = 2
         elif step.action.type == ActionType.CLICK and step.condition.type == ConditionType.TIME: idx = 3
         elif step.action.type == ActionType.NONE and step.condition.type == ConditionType.TIME: idx = 4 # Wait
         elif step.action.type == ActionType.GOTO: idx = 5
-        elif step.type == StepType.AWAIT: idx = 6
-        elif step.type == StepType.IF: idx = 6 # Reuse Await / or generic? IF has no specific props yet
-        elif step.type == StepType.UNTIL: idx = 6 # Reuse Await / or generic?
         
         self.command_combo.setCurrentIndex(idx)
         self.stack.setCurrentIndex(idx)
