@@ -27,6 +27,7 @@ class StepPropertiesWidget(QWidget):
         self.name_edit = QLineEdit()
         self.command_combo = QComboBox()
         self.command_combo.addItems(["Find Image", "Find Color", "Move Mouse", "Click Mouse", "Wait", "Loop/Goto"])
+        self.command_combo.setEnabled(False) # Prevent changing type after creation (User Request)
         
         top_layout.addRow("Step Name:", self.name_edit)
         top_layout.addRow("Action Type:", self.command_combo)

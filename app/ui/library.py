@@ -12,6 +12,7 @@ class ComponentLibraryWidget(QListWidget):
         
         # Populate library
         self._add_item("Image Match", "Condition", "image")
+        self._add_item("Find Color", "Condition", "color")
         # Text Match removed as per user request (too slow)
         self._add_item("Wait", "Condition", "wait")
         self._add_item("Click", "Action", "click")

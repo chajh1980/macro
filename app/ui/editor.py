@@ -146,6 +146,10 @@ class WorkflowEditor(QMainWindow):
                 new_step.condition.type = ConditionType.TIME
                 new_step.condition.wait_time_s = 1.0
                 new_step.name = "Wait"
+            elif type_code == "color":
+                new_step.condition.type = ConditionType.COLOR
+                new_step.action.type = ActionType.MOVE
+                new_step.name = "Find Color"
                 
         elif category == "Action":
             if type_code == "click":
