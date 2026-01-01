@@ -1,7 +1,8 @@
 import os
 import json
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QSplitter, QMessageBox, QCheckBox, QApplication
+    QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QSplitter, QMessageBox, QCheckBox, QApplication,
+    QTreeWidgetItemIterator
 )
 from PyQt6.QtCore import Qt, QRect
 from app.ui.toolbar import ComponentToolbar
@@ -413,7 +414,7 @@ class WorkflowEditor(QMainWindow):
         if self.inspector.current_step:
             # Restore selection
             # We need to find the item corresponding to current_step
-            iterator = PyQt6.QtWidgets.QTreeWidgetItemIterator(self.canvas)
+            iterator = QTreeWidgetItemIterator(self.canvas)
             while iterator.value():
                 item = iterator.value()
                 if item.data(0, Qt.ItemDataRole.UserRole) == self.inspector.current_step:
