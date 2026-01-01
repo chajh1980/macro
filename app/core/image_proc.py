@@ -26,7 +26,8 @@ def find_image_on_screen(
             region=region,
             grayscale=grayscale
         ))
-    except (pyautogui.ImageNotFoundException, Exception):
+    except (pyautogui.ImageNotFoundException, Exception) as e:
+        logger.debug(f"Standard search failed: {e}")
         pass
         
     if matches:
