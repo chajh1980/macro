@@ -131,8 +131,8 @@ class StepPropertiesWidget(QWidget):
         self.await_timeout = QDoubleSpinBox(); self.await_timeout.setRange(0, 3600); self.await_timeout.setValue(10.0)
         self.await_interval = QSpinBox(); self.await_interval.setRange(10, 10000); self.await_interval.setValue(500); self.await_interval.setSuffix(" ms")
         layout_await.addRow(QLabel("Waits for child steps to succeed."))
-        layout_await.addRow("Timeout (s):", self.await_timeout)
-        layout_await.addRow("Check Interval:", self.await_interval)
+        layout_await.addRow("Max Duration (Limit) (s):", self.await_timeout)
+        layout_await.addRow("Retry Delay (Interval):", self.await_interval)
         self.stack.addWidget(self.page_await)
         
         # --- Bottom ---

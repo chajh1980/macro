@@ -85,7 +85,7 @@ class StepCardWidget(QWidget):
         # Info label depends on type
         info_text = ""
         if self.step.type == StepType.AWAIT:
-             info_text = f"{self.step.condition.retry_timeout_s}s"
+             info_text = f"Limit: {self.step.condition.retry_timeout_s}s | Delay: {self.step.condition.retry_interval_ms}ms"
         elif self.step.type == StepType.UNTIL:
              info_text = "Loop"
         elif self.step.type == StepType.IF:
