@@ -85,6 +85,7 @@ class StepCardWidget(QWidget):
                 
                 drag.exec(Qt.DropAction.MoveAction)
                 self.drag_start_pos = None
+                return # IMPORTANT: Widget might be deleted after drag (refresh), so stop here.
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent):
