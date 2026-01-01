@@ -37,7 +37,8 @@ def build():
     
     # OS Specifics
     if os_name == "Darwin": # macOS
-        args.append("--target-architecture=universal2") # Support M1/Intel if possible, or just default
+        # args.append("--target-architecture=universal2") # universal2 is tricky with mixed wheels. Let's stick to native arch of the runner.
+        pass
     elif os_name == "Windows":      
         # args.append("--icon=icon.ico") # If we had an icon
         pass
@@ -52,15 +53,14 @@ def build():
         print("="*50)
         
         if os_name == "Darwin":
-            print("You can find the app in: dist/AutoMacro.app")
-            print("Note: To run on other Macs, you may need to sign the app or allow it in Security settings.")
+            print("You can find the app in: dist/AutoMacro")
         elif os_name == "Windows":
-            print("You can find the executable in: dist/AutoMacro/AutoMacro.exe")
-            print("Copy the entire 'AutoMacro' folder to use it.")
+            print("You can find the executable in: dist/AutoMacro.exe")
             
     except subprocess.CalledProcessError as e:
         print("Build Failed:", e)
         print("Make sure you have installed requirements: pip install -r requirements.txt")
+        sys.exit(1) # CRITICAL: Exit with error code so CI knows it failed
 
 if __name__ == "__main__":
     build()
