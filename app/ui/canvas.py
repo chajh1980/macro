@@ -21,11 +21,6 @@ class StepCardWidget(QWidget):
     
     def __init__(self, step: Step, index_str: str):
         super().__init__()
-        self.setAcceptDrops(True)
-        self.setDragEnabled(True)
-        self.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
-        self.setDefaultDropAction(Qt.DropAction.MoveAction) # Default for internal reorder
-        self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.step = step
         self.layout = QHBoxLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
