@@ -1,7 +1,6 @@
 from PyQt6.QtWidgets import QWidget, QRubberBand, QApplication
 from PyQt6.QtCore import Qt, QRect, pyqtSignal, QTimer
 from PyQt6.QtGui import QPainter, QColor, QPen
-import pyautogui
 from app.utils.screen_utils import get_screen_scale
 
 class Overlay(QWidget):
@@ -17,6 +16,7 @@ class Overlay(QWidget):
         self.highlight_rect = highlight_rect
         
         # 1. Capture Screen State BEFORE showing overlay (Fixes Dimming Bug)
+        import pyautogui
         self.screen_grab = pyautogui.screenshot() # Returns PIL Image
         
         self.setWindowFlags(

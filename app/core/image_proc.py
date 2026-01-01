@@ -1,6 +1,3 @@
-import pyautogui
-import cv2
-import numpy as np
 from typing import List, Tuple, Optional
 import logging
 
@@ -12,6 +9,9 @@ def find_image_on_screen(
     region: Optional[Tuple[int, int, int, int]] = None,
     grayscale: bool = False
 ) -> List[Tuple[int, int, int, int]]:
+    import pyautogui
+    import cv2
+    import numpy as np
     """
     Finds all occurrences of the target image on the screen.
     Returns a list of (left, top, width, height) tuples.
@@ -130,6 +130,9 @@ def find_color_on_screen(
     Finds regions matching the target color.
     Returns list of (x, y, w, h) bounding boxes of matching connected components.
     """
+    import pyautogui
+    import cv2
+    import numpy as np
     try:
         # 1. Parse Hex to BGR
         if target_hex.startswith('#'):
