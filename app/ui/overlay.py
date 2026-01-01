@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QWidget, QRubberBand, QApplication
 from PyQt6.QtCore import Qt, QRect, pyqtSignal, QTimer
-from PyQt6.QtGui import QPainter, QColor, QPen
+from PyQt6.QtGui import QPainter, QColor, QPen, QPixmap, QImage
 from app.utils.screen_utils import get_screen_scale
 
 class Overlay(QWidget):
@@ -18,6 +18,13 @@ class Overlay(QWidget):
         # 1. Capture Screen State BEFORE showing overlay (Fixes Dimming Bug)
         import pyautogui
         self.screen_grab = pyautogui.screenshot() # Returns PIL Image
+        
+        # Convert to QPixmap for painting
+        im = self.screen_grab.convert("RGBA")
+        data = im.tobytes("raw", "RGBA")
+        qim = QImage(data, im.size[0], im.size[1], QImage.Format.Format_RGBA8888)
+        self.full_pixmap = QPixmap.fromImage(qim)
+         
         
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint | 
@@ -101,6 +108,150 @@ class Overlay(QWidget):
             painter.fillRect(label_rect, Qt.GlobalColor.red)
             painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, label_text)
             
+        elif self.mode == "color":
+             # 1. Dim Background
+             painter.setBrush(QColor(0, 0, 0, 50))
+             painter.setPen(Qt.PenStyle.NoPen)
+             painter.drawRect(self.rect())
+             
+             # 2. Magnifier Logic
+             if hasattr(self, 'mouse_pos') and self.mouse_pos:
+                 mx, my = self.mouse_pos.x(), self.mouse_pos.y()
+                 
+                 # Config
+                 zoom_factor = 4 # 4x Zoom
+                 capture_radius = 10 # Capture 10px radius (20x20 area)
+                 # Total Capture Size = 20x20
+                 # Total Display Size = 20 * Zoom = 80x80
+                 
+                 # Prepare Source Rect (Physical Coords for High-DPI)
+                 scale = 1.0
+                 if self.full_pixmap.width() > self.width():
+                     scale = self.full_pixmap.width() / self.width()
+                     
+                 # Center of capture in Physical Coords
+                 phys_cx = int(mx * scale)
+                 phys_cy = int(my * scale)
+                 phys_radius = int(capture_radius * scale)
+                 
+                 # Crop Rect
+                 crop_rect = QRect(
+                     phys_cx - phys_radius, 
+                     phys_cy - phys_radius, 
+                     phys_radius * 2, 
+                     phys_radius * 2
+                 )
+                 
+                 # Capture from cached pixmap
+                 cropped = self.full_pixmap.copy(crop_rect)
+                 
+                 # Scale up for Zoom (Nearest Neighbor for crisp pixels)
+                 display_size = (capture_radius * 2) * zoom_factor
+                 zoomed = cropped.scaled(
+                     display_size, display_size, 
+                     Qt.AspectRatioMode.KeepAspectRatio, 
+                     Qt.TransformationMode.FastTransformation
+                 )
+                 
+                 # Draw Magnifier Box (Offset from cursor)
+                 offset_x = 20
+                 offset_y = 20
+                 
+                 # Check boundaries to flip side if near edge
+                 draw_x = mx + offset_x
+                 draw_y = my + offset_y
+                 if draw_x + display_size > self.width(): draw_x = mx - offset_x - display_size
+                 if draw_y + display_size > self.height(): draw_y = my - offset_y - display_size
+                 
+                 # Draw White Border/Background for Magnifier
+                 mag_rect = QRect(draw_x, draw_y, display_size, display_size)
+                 painter.setBrush(Qt.GlobalColor.white)
+                 painter.setPen(QPen(Qt.GlobalColor.black, 1))
+                 painter.drawRect(mag_rect.adjusted(-1, -1, 1, 1)) # Border
+                 
+                 painter.drawPixmap(mag_rect, zoomed)
+                 
+                 # Draw Central Crosshair (Highlighting the center pixel)
+                 # Center pixel is at (radius * zoom, radius * zoom) in local coords
+                 center_local = capture_radius * zoom_factor
+                 pixel_size = zoom_factor # 1 logical pixel * zoom? No, 1 captured pixel * zoom.
+                 # Actually 1 physical pixel * zoom?
+                 # If scale=2 (Retina), 1 logical px = 2 physical px.
+                 # We captured physical pixels.
+                 # If we want to highlight ONE LOGICAL PIXEL (which user is picking),
+                 # that is 'scale' physical pixels.
+                 # So standard pixel size on magnifier = zoom_factor * scale? No.
+                 # zoomed is physically scaled.
+                 
+                 # Let's simplify: Highlight the CENTER of the magnifier.
+                 # We want to outline the center block.
+                 # Block size = zoom_factor (if 1 src pixel -> zoom_factor pixels)
+                 # Wait, if Retina (scale=2), we captured 40x40 for 20x20 logical area.
+                 # We display 40x40 * zoom? No.
+                 # capture_radius=10 -> 20px logical width.
+                 # Physical width = 20 * 2 = 40px.
+                 # We crop 40x40 physical pixels.
+                 # We want to display this as ??
+                 # If we duplicate each physical pixel by zoom_factor...
+                 # But valid color picking is on PHYSICAL pixel usually (or logical?).
+                 # Our color picker code (lines 212) picks PHYSICAL pixel: self.screen_grab.getpixel((px, py))
+                 # So we are picking ONE PHYSICAL PIXEL.
+                 # So we should highlight ONE PHYSICAL PIXEL.
+                 # In 'zoomed' pixmap (scaled from physical source), 1 physical pixel = 'zoom_factor' pixels wide/high.
+                 # Correct.
+                 
+                 # So highlight box size = zoom_factor.
+                 # Position = Center.
+                 # Center of mag_rect is (draw_x + display_size/2, ...).
+                 # We want to draw a box of size `zoom_factor` centered there.
+                 # TopLeft = Center - zoom_factor/2
+                 
+                 cx = draw_x + (display_size // 2)
+                 cy = draw_y + (display_size // 2)
+                 
+                 # Adjust for box alignment
+                 # If even size, center is between pixels. 
+                 # 20 radius -> 40 pixels. Center is between 20 and 21.
+                 # We want pixel 20 (0-indexed? 0..39. Center? 19 or 20?)
+                 # phys_cx is center. radius is 10. Range [cx-10, cx+10). Length 20.
+                 # Center pixel is relative index 10.
+                 # So 10 * zoom_factor is the offset.
+                 # Yes.
+                 
+                 box_size = zoom_factor
+                 # Offset from top-left of mag_rect
+                 box_x = draw_x + (capture_radius * scale * zoom_factor) # Wait, logic tricky with scale
+                 # Simplification: Draw crosshair over the whole widget
+                 
+                 painter.setPen(QPen(Qt.GlobalColor.red, 1))
+                 painter.setBrush(Qt.BrushStyle.NoBrush)
+                 
+                 # Box around center pixel?
+                 # Center of 'zoomed' corresponds to the mouse position.
+                 # Mouse pos is 'phys_cx'.
+                 # In crop, 'phys_cx' is at index 'phys_radius' (if crop is cx-r to cx+r).
+                 # So relative position is `phys_radius`.
+                 # Scaled position = `phys_radius * zoom_src_to_dst_ratio`?
+                 # zoomed size = display_size.
+                 # cropped size = phys_radius * 2.
+                 # Ratio = display_size / (phys_radius * 2) = zoom_factor.
+                 # So relative pixel x = phys_radius * zoom_factor.
+                 
+                 # Draw red box
+                 center_box_x = draw_x + (phys_radius * zoom_factor)
+                 center_box_y = draw_y + (phys_radius * zoom_factor)
+                 
+                 # But we might need to adjust if zoom_factor is small.
+                 # Just draw a crosshair for now.
+                 
+                 # Crosshair
+                 painter.drawLine(draw_x + (display_size // 2), draw_y, draw_x + (display_size // 2), draw_y + display_size)
+                 painter.drawLine(draw_x, draw_y + (display_size // 2), draw_x + display_size, draw_y + (display_size // 2))
+                 
+                 # Outline Center Pixel
+                 painter.drawRect(center_box_x, center_box_y, zoom_factor, zoom_factor)
+                 
+                 
         else:
             # Standard Capture Overlay
             painter.setBrush(QColor(0, 0, 0, 50))
@@ -122,6 +273,15 @@ class Overlay(QWidget):
             self.close() # Click to dismiss early
             return
 
+        if self.mode == "color":
+             # Trigger Pick
+             # Already handled in mouseRelease typically? 
+             # Or mouseRelease calls 'hide' then emit.
+             # Let's keep consistency.
+             # Just store clicked?
+             # Standard behavior: Press -> (Drag) -> Release -> Action.
+             pass
+
         if event.button() == Qt.MouseButton.LeftButton:
             self.start_point = event.pos()
             if self.mode == "region":
@@ -132,6 +292,9 @@ class Overlay(QWidget):
         if self.mode == "region" and self.start_point:
             self.end_point = event.pos()
             self.rubber_band.setGeometry(QRect(self.start_point, self.end_point).normalized())
+            self.update()
+        elif self.mode == "color":
+            self.mouse_pos = event.pos()
             self.update()
             
     def mouseReleaseEvent(self, event):
