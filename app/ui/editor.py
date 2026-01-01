@@ -69,8 +69,10 @@ class WorkflowEditor(QMainWindow):
         main_layout.addLayout(btn_layout)
         
         # Connect Signals
+        # Connect Signals
         self.canvas.step_dropped.connect(self._on_step_dropped)
         self.canvas.itemClicked.connect(self._on_step_selected)
+        self.canvas.step_clicked.connect(self._on_step_clicked_from_widget) # New Connection
         
         self.save_btn.clicked.connect(self._save_workflow)
         self.delete_btn.clicked.connect(self._delete_current_step) # Connect
@@ -203,16 +205,30 @@ class WorkflowEditor(QMainWindow):
         # For now, just expand all
         self.canvas.expandAll()
         
-    def _on_step_selected(self, item):
+    def _on_step_selected(self, item, col=0):
         if not item:
             self.inspector.show_workflow_props(self.workflow)
             return
             
         step = item.data(0, Qt.ItemDataRole.UserRole)
+        # If this item has a widget (StepCardWidget), let the widget handle selection/click styling?
+        # But itemClicked is triggered by QTreeWidget standard click.
+        # We also have step_clicked signals from the internal widgets.
         if step:
             self.inspector.show_step_props(step)
         else:
             self.inspector.show_workflow_props(self.workflow)
+
+    def _on_step_clicked_from_widget(self, step):
+        # Direct Signal from StepCardWidget (ClickableFrame)
+        if step:
+            self.inspector.show_step_props(step)
+            # Optional: Synthesize selection in TreeWidget so keyboard nav works?
+            # We need to find the item.
+            # But the item might be hidden (for child)?
+            # If Child is hidden, we can't select it in QTreeWidget.
+            # But we can still show props.
+            pass
             
     def _on_step_changed_from_inspector(self, step):
         self.has_unsaved_changes = True
