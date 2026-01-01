@@ -50,6 +50,8 @@ class StepCardWidget(QWidget):
         self.layout.setSpacing(0)
         self.setLayout(self.layout)
         
+        self.drag_start_pos = None # For drag handling
+        
         # Check if AWAIT, IF, or UNTIL with child -> "Two Slot" Mode
         self.child_step = None
         if step.type in [StepType.AWAIT, StepType.IF, StepType.UNTIL] and step.children:
@@ -60,7 +62,39 @@ class StepCardWidget(QWidget):
         else:
             self._init_standard_ui(index_str)
 
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.drag_start_pos = event.pos()
+            self.step_selected.emit(self.step) # Also select on press
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if self.drag_start_pos:
+            from PyQt6.QtWidgets import QApplication
+            if (event.pos() - self.drag_start_pos).manhattanLength() > QApplication.startDragDistance():
+                # Start Drag
+                drag = QDrag(self)
+                mime = QMimeData()
+                # Format: "move:{step_id}"
+                mime.setText(f"move:{self.step.id}")
+                mime.setData("application/vnd.antigravity.step-type", f"move:{self.step.id}".encode())
+                drag.setMimeData(mime)
+                # Visual Feedback
+                # pixmap = self.grab() # Too slow?
+                # drag.setPixmap(pixmap)
+                
+                drag.exec(Qt.DropAction.MoveAction)
+                self.drag_start_pos = None
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        self.drag_start_pos = None
+        super().mouseReleaseEvent(event)
+
     def _init_standard_ui(self, index_str):
+        # ... standard UI setup ...
+        self.setCursor(Qt.CursorShape.PointingHandCursor) # Indicate clickable/draggable
+        
         self.layout.setContentsMargins(5, 5, 5, 5)
         self.layout.setSpacing(10)
         
