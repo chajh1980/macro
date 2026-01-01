@@ -81,16 +81,17 @@ class WorkflowEditor(QMainWindow):
         self.inspector.show_workflow_props(self.workflow)
         
         # Connect Inspector Signals to update logic
+        # Connect Inspector Signals to update logic
         # Image Page
-        self.inspector.step_props.capture_img_btn.clicked.connect(self._capture_image)
-        self.inspector.step_props.img_capture_area_btn.clicked.connect(lambda: self._capture_area_watch(for_image=True))
+        self.inspector.step_props.btn_capture_img.clicked.connect(self._capture_image)
+        self.inspector.step_props.btn_set_area_img.clicked.connect(lambda: self._capture_area_watch(for_image=True))
         
         # Color Page
-        self.inspector.step_props.pick_color_btn.clicked.connect(self._pick_color)
-        self.inspector.step_props.color_set_area_btn.clicked.connect(lambda: self._capture_area_watch(for_image=False))
+        self.inspector.step_props.btn_pick_color.clicked.connect(self._pick_color)
+        self.inspector.step_props.btn_set_area_color.clicked.connect(lambda: self._capture_area_watch(for_image=False))
         
         # Move Page
-        self.inspector.step_props.pick_pos_btn.clicked.connect(self._pick_point)
+        self.inspector.step_props.btn_pick_pos.clicked.connect(self._pick_point)
         
         # Test Button
         self.inspector.step_props.test_btn.clicked.connect(self._test_current_step)
@@ -346,9 +347,6 @@ class WorkflowEditor(QMainWindow):
 
         current_step.action.target_x = x
         current_step.action.target_y = y
-        self.inspector.step_props.load_step(current_step)
-        self._refresh_canvas_item()
-
         self.inspector.step_props.load_step(current_step)
         self._refresh_canvas_item()
 
