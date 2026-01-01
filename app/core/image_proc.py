@@ -18,6 +18,44 @@ def find_image_on_screen(
     """
     matches = []
     
+    # DEBUG: Log start
+    logger.debug(f"DEBUG_IMAGE: Searching for {target_image_path} with confidence={confidence}, region={region}")
+    
+    # DEBUG: Save Debug Screenshot of what we are searching on
+    try:
+        from app.utils.common import get_app_dir
+        import os
+        
+        # 0. Capture what PyAutoGUI sees (for debugging)
+        # Note: pyautogui.locateAllOnScreen does its own capture, but we can't see it.
+        # So we manually capture to verify.
+        debug_ss = pyautogui.screenshot(region=region)
+        debug_img = np.array(debug_ss)
+        
+        # Handle RGBA
+        if debug_img.shape[2] == 4:
+            debug_img = debug_img[:, :, :3]
+        
+        # Convert RGB to BGR for OpenCV
+        debug_img = cv2.cvtColor(debug_img, cv2.COLOR_RGB2BGR)
+        
+        debug_path = os.path.join(get_app_dir(), "debug_image_search_capture.png")
+        cv2.imwrite(debug_path, debug_img)
+        logger.debug(f"DEBUG_IMAGE: Saved capture to {debug_path} (Shape={debug_img.shape})")
+        
+        # Check Template
+        if os.path.exists(target_image_path):
+             tmpl = cv2.imread(target_image_path)
+             if tmpl is not None:
+                 logger.debug(f"DEBUG_IMAGE: Template loaded. Shape={tmpl.shape}")
+             else:
+                 logger.error(f"DEBUG_IMAGE: Failed to load template with cv2: {target_image_path}")
+        else:
+             logger.error(f"DEBUG_IMAGE: Template file does not exist: {target_image_path}")
+
+    except Exception as e:
+        logger.error(f"DEBUG_IMAGE: Error saving debug info: {e}")
+
     # 1. Try Standard Search
     try:
         matches = list(pyautogui.locateAllOnScreen(
@@ -26,8 +64,9 @@ def find_image_on_screen(
             region=region,
             grayscale=grayscale
         ))
+        logger.debug(f"DEBUG_IMAGE: Found {len(matches)} matches (Standard)")
     except (pyautogui.ImageNotFoundException, Exception) as e:
-        logger.debug(f"Standard search failed: {e}")
+        logger.debug(f"DEBUG_IMAGE: Standard search failed/empty: {e}")
         pass
         
     if matches:
