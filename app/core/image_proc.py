@@ -153,12 +153,46 @@ def find_image_on_screen(
             g_phys_x = crop_offset_x + pt[0]
             g_phys_y = crop_offset_y + pt[1]
             
-            matches.append(pyautogui.Box(g_phys_x, g_phys_y, t_w, t_h))
+            # matches.append(pyautogui.Box(g_phys_x, g_phys_y, t_w, t_h)) # Failed: No attribute Box
+            # Use simple namedtuple-like object or just return tuples directly and adjust return
+            
+            # We will use a simple class to mimic PyAutoGUI Box for compatibility with lines below
+            class Box:
+                def __init__(self, left, top, width, height):
+                    self.left = left
+                    self.top = top
+                    self.width = width
+                    self.height = height
+            
+            matches.append(Box(g_phys_x, g_phys_y, t_w, t_h))
             
         logger.debug(f"DEBUG_IMAGE: Found {len(matches)} matches (Manual 2x)")
+        
+        if matches:
+             results = [(box.left, box.top, box.width, box.height) for box in matches]
+             return results
 
     except Exception as e:
         logger.error(f"DEBUG_IMAGE: Manual search failed: {e}")
+        # pass # Fallthrough to standard search or fail
+        
+    # If High-Res Manual Search failed (exception or no matches), try standard as fallback?
+    # Actually, standard sends to pyautogui which we know fails on size mismatch.
+    # So we should just continue.
+    
+    # 1. Try Standard Search (Fallback)
+    # If manual search handled it, we returned.
+    # If we are here, manual failed or found nothing.
+    try:
+        matches = list(pyautogui.locateAllOnScreen(
+            target_image_path,
+            confidence=confidence,
+            region=region,
+            grayscale=grayscale
+        ))
+        logger.debug(f"DEBUG_IMAGE: Found {len(matches)} matches (Standard)")
+    except (pyautogui.ImageNotFoundException, Exception) as e:
+        logger.debug(f"DEBUG_IMAGE: Standard search failed/empty: {e}")
         pass
         
     if matches:
