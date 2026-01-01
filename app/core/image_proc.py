@@ -161,8 +161,10 @@ def find_color_on_screen(
             if w > 0 and h > 0:
                 # Add region offset if needed
                 if region:
-                    x += region[0]
-                    y += region[1]
+                    from app.utils.screen_utils import get_screen_scale
+                    scale = get_screen_scale()
+                    x += int(region[0] * scale)
+                    y += int(region[1] * scale)
                 matches.append((x, y, w, h))
                 
         # Sort by visual order (top-left)
