@@ -174,6 +174,14 @@ def find_color_on_screen(
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         print(f"DEBUG_COLOR: Found {len(contours)} contours")
         
+        # DEBUG: Log region and scale
+        if region:
+            from app.utils.screen_utils import get_screen_scale
+            scale = get_screen_scale()
+            print(f"DEBUG_COLOR: Region provided={region}, Scale={scale}")
+        else:
+            print("DEBUG_COLOR: No region provided (Full Screen)")
+            
         matches = []
         for cnt in contours:
             x, y, w, h = cv2.boundingRect(cnt)
@@ -183,8 +191,11 @@ def find_color_on_screen(
                 if region:
                     from app.utils.screen_utils import get_screen_scale
                     scale = get_screen_scale()
+                    local_x, local_y = x, y
                     x += int(region[0] * scale)
                     y += int(region[1] * scale)
+                    print(f"DEBUG_COLOR: Offset calc: Local({local_x},{local_y}) + Region({region[0]},{region[1]})*Scale({scale}) -> Global({x},{y})")
+                    
                 matches.append((x, y, w, h))
         
         # DEBUG: Draw matches on a result image
