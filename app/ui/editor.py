@@ -83,15 +83,15 @@ class WorkflowEditor(QMainWindow):
         # Connect Inspector Signals to update logic
         # Connect Inspector Signals to update logic
         # Image Page
-        self.inspector.step_props.btn_capture_img.clicked.connect(self._capture_image)
-        self.inspector.step_props.btn_set_area_img.clicked.connect(lambda: self._capture_area_watch(for_image=True))
+        self.inspector.step_props.capture_img_btn.clicked.connect(self._capture_image)
+        self.inspector.step_props.img_capture_area_btn.clicked.connect(lambda: self._capture_area_watch(for_image=True))
         
         # Color Page
-        self.inspector.step_props.btn_pick_color.clicked.connect(self._pick_color)
-        self.inspector.step_props.btn_set_area_color.clicked.connect(lambda: self._capture_area_watch(for_image=False))
+        self.inspector.step_props.pick_color_btn.clicked.connect(self._pick_color)
+        self.inspector.step_props.color_set_area_btn.clicked.connect(lambda: self._capture_area_watch(for_image=False))
         
         # Move Page
-        self.inspector.step_props.btn_pick_pos.clicked.connect(self._pick_point)
+        self.inspector.step_props.pick_pos_btn.clicked.connect(self._pick_point)
         
         # Test Button
         self.inspector.step_props.test_btn.clicked.connect(self._test_current_step)
@@ -250,30 +250,53 @@ class WorkflowEditor(QMainWindow):
         self._refresh_canvas()
 
     def _delete_current_step(self):
-        row = self.canvas.currentRow()
-        if row < 0:
+        # Tree Widget Deletion
+        item = self.canvas.currentItem()
+        if not item:
             QMessageBox.information(self, "Delete", "Please select a step to delete.")
             return
             
-        step = self.workflow.steps[row]
+        step = item.data(0, Qt.ItemDataRole.UserRole)
+        # Find index in flat list? No, tree removal.
+        # We need to find parent logic.
+        
         reply = QMessageBox.question(
             self, "Delete Step",
-            f"Are you sure you want to delete step #{row+1} '{step.name}'?",
+            f"Are you sure you want to delete step '{step.name}'?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
         if reply == QMessageBox.StandardButton.Yes:
-            del self.workflow.steps[row]
-            self.has_unsaved_changes = True
-            self._refresh_canvas()
+            # Recursive deletion logic:
+            # 1. Remove from Data Model
+            # This is hard with just 'step' object unless we have parent ref.
+            # Easiest: Rebuild model from tree AFTER removing item from tree?
+            # Or traverse model to find and remove.
             
-            # Select next item or previous or nothing
-            next_row = min(row, self.canvas.count() - 1)
-            if next_row >= 0:
-                self.canvas.setCurrentRow(next_row)
-                self._on_step_selected(self.canvas.item(next_row))
+            # Helper to remove step from recursive list
+            def remove_step_from_list(target, steps_list):
+                if target in steps_list:
+                    steps_list.remove(target)
+                    return True
+                for s in steps_list:
+                    if remove_step_from_list(target, s.children):
+                        return True
+                return False
+                
+            if remove_step_from_list(step, self.workflow.steps):
+                # 2. Remove from UI
+                # QTreeWidget.invisibleRootItem().removeChild(item)? No, item might have parent.
+                parent = item.parent()
+                if parent:
+                    parent.removeChild(item)
+                else:
+                    self.canvas.invisibleRootItem().removeChild(item)
+                
+                self.has_unsaved_changes = True
+                self._refresh_canvas() # Full refresh to update indices
             else:
-                self.inspector.show_workflow_props(self.workflow)
+                QMessageBox.warning(self, "Error", "Could not find step in model to delete.")
+            
 
     # --- Capture Handlers ---
     
@@ -368,12 +391,19 @@ class WorkflowEditor(QMainWindow):
     def _refresh_canvas_item(self):
         # Simply refresh list for now
         self._refresh_canvas()
+    def _refresh_canvas_item(self):
+        # Simply refresh list for now
+        self._refresh_canvas()
         if self.inspector.current_step:
-            try:
-                idx = self.workflow.steps.index(self.inspector.current_step)
-                self.canvas.setCurrentRow(idx)
-            except ValueError:
-                pass
+            # Restore selection
+            # We need to find the item corresponding to current_step
+            iterator = PyQt6.QtWidgets.QTreeWidgetItemIterator(self.canvas)
+            while iterator.value():
+                item = iterator.value()
+                if item.data(0, Qt.ItemDataRole.UserRole) == self.inspector.current_step:
+                    self.canvas.setCurrentItem(item)
+                    break
+                iterator += 1
 
     def _test_current_step(self):
         """Test the current step logic and show visual feedback"""
