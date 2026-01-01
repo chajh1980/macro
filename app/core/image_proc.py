@@ -142,6 +142,19 @@ def find_color_on_screen(
         # 2. Capture Screen
         screenshot = pyautogui.screenshot(region=region)
         img = np.array(screenshot)
+        
+        # DEBUG: Save screenshot to verify what we are searching (User requested)
+        import os
+        from app.utils.common import get_app_dir
+        debug_path = os.path.join(get_app_dir(), "debug_color_search.png")
+        if not os.path.exists(get_app_dir()):
+            os.makedirs(get_app_dir())
+        cv2.imwrite(debug_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR)) # Save original capture
+        
+        # Handle RGBA (Mac) -> RGB
+        if img.shape[2] == 4:
+            img = img[:, :, :3]
+            
         # RGB to BGR
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         
