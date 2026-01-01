@@ -179,22 +179,48 @@ def find_color_on_screen(
             from app.utils.screen_utils import get_screen_scale
             scale = get_screen_scale()
             print(f"DEBUG_COLOR: Region provided={region}, Scale={scale}")
-        else:
-            print("DEBUG_COLOR: No region provided (Full Screen)")
             
+            # Check if capture is 1x (Logical) or 2x (Physical)
+            # Img shape is (H, W, C)
+            h_img, w_img = img.shape[:2]
+            w_region = region[2]
+            
+            capture_scale = 1.0
+            if abs(w_img - w_region * scale) < 5:
+                capture_scale = scale # Captured at 2x
+                print("DEBUG_COLOR: Capture is Physical (High-Res)")
+            elif abs(w_img - w_region) < 5:
+                capture_scale = 1.0 # Captured at 1x
+                print("DEBUG_COLOR: Capture is Logical (Low-Res)")
+            else:
+                 print(f"DEBUG_COLOR: Capture size mismatch? Img={w_img}, Region={w_region}")
+        else:
+            scale = 1.0 # Fallback
+            capture_scale = 1.0
+            print("DEBUG_COLOR: No region provided (Full Screen)")
+            from app.utils.screen_utils import get_screen_scale
+            scale = get_screen_scale()
+
         matches = []
         for cnt in contours:
             x, y, w, h = cv2.boundingRect(cnt)
             # Filter tiny noise (Require at least 5px dimensions)
             if w >= 5 and h >= 5:
-                # Add region offset if needed
+                
+                # Normalize to Physical Coordinates (2x)
+                if capture_scale == 1.0 and scale > 1.0:
+                    # Captured in 1x, need to upscale to Physical
+                    x = int(x * scale)
+                    y = int(y * scale)
+                    w = int(w * scale)
+                    h = int(h * scale)
+                
+                # Add region offset (Region is Logical, so multiply by scale for Physical)
                 if region:
-                    from app.utils.screen_utils import get_screen_scale
-                    scale = get_screen_scale()
                     local_x, local_y = x, y
                     x += int(region[0] * scale)
                     y += int(region[1] * scale)
-                    print(f"DEBUG_COLOR: Offset calc: Local({local_x},{local_y}) + Region({region[0]},{region[1]})*Scale({scale}) -> Global({x},{y})")
+                    print(f"DEBUG_COLOR: Offset calc: LocalScaled({local_x},{local_y}) + RegionScaled({int(region[0]*scale)},{int(region[1]*scale)}) -> Global({x},{y})")
                     
                 matches.append((x, y, w, h))
         
