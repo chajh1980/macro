@@ -118,6 +118,61 @@ def find_image_on_screen(
     # 4. Low Confidence Fallback removed per user feedback.
     # It causes false positives on state-sensitive icons (different colors).
     
+    # If no matches found, run manual CV2 matching to generate debug info (Heatmap & Best Match)
+    if not matches:
+        logger.info("Standard search failed. Running debug visualization...")
+        try:
+            # Re-read the debug capture we saved earlier
+            # We need to reconstruct the debug_path logic from above or just ensure we have the path.
+            # Just re-import and re-construct to be safe or assuming variable scope if defined.
+            # Since 'debug_path' is defined in the try block above, it might not be available here if that failed.
+            # But we can reconstruct:
+            from app.utils.common import get_app_dir
+            import os
+            debug_path = os.path.join(get_app_dir(), "debug_image_search_capture.png")
+            
+            if os.path.exists(debug_path):
+                # 1. Load Screen & Template
+                # dbg_img is BGR
+                screen_img = cv2.imread(debug_path)
+                tmpl_img = cv2.imread(target_image_path)
+                
+                if screen_img is not None and tmpl_img is not None:
+                     
+                     res = cv2.matchTemplate(screen_img, tmpl_img, cv2.TM_CCOEFF_NORMED)
+                     
+                     # 2. Save Heatmap
+                     # Normalize to 0-255
+                     heatmap = cv2.normalize(res, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
+                     heatmap_color = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+                     hm_path = os.path.join(get_app_dir(), "debug_image_heatmap.png")
+                     cv2.imwrite(hm_path, heatmap_color)
+                     
+                     # 3. Find Best Match
+                     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+                     logger.info(f"DEBUG_IMAGE: Best match confidence: {max_val:.4f} at {max_loc}")
+                     
+                     # 4. Draw Best Match on Result
+                     h, w = tmpl_img.shape[:2]
+                     top_left = max_loc
+                     bottom_right = (top_left[0] + w, top_left[1] + h)
+                     
+                     result_img = screen_img.copy()
+                     # Red box for "Best Guess (Failed)"
+                     cv2.rectangle(result_img, top_left, bottom_right, (0, 0, 255), 2)
+                     
+                     # Add text with confidence
+                     text = f"Best: {max_val:.2f} (Req: {confidence})"
+                     cv2.putText(result_img, text, (top_left[0], top_left[1] - 10), 
+                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+                                 
+                     res_path = os.path.join(get_app_dir(), "debug_image_result.png")
+                     cv2.imwrite(res_path, result_img)
+                     logger.info(f"DEBUG_IMAGE: Saved result to {res_path}")
+
+        except Exception as e:
+            logger.error(f"DEBUG_IMAGE: Visualization failed: {e}")
+
     return []
 
 def sort_matches(matches: List[Tuple[int, int, int, int]]) -> List[Tuple[int, int, int, int]]:
