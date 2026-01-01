@@ -386,6 +386,11 @@ class StepPropertiesWidget(QWidget):
         # Preview
         if mode_idx == 0:
             self._update_preview(step.condition.target_image_path)
+            
+        # Hide Retry Policy for IF/UNTIL (Flow Control should be instant check usually)
+        is_flow_control = step.type in (StepType.IF, StepType.UNTIL)
+        self.grp_retry_img.setVisible(not is_flow_control)
+        self.grp_retry_color.setVisible(not is_flow_control)
         
         self.blockSignals(False)
         
