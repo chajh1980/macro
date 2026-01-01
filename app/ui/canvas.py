@@ -1,45 +1,128 @@
-from PyQt6.QtWidgets import QTreeWidget, QTreeWidgetItem, QAbstractItemView, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton
+from PyQt6.QtWidgets import QTreeWidget, QTreeWidgetItem, QAbstractItemView, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QFrame
 from PyQt6.QtCore import Qt, pyqtSignal, QMimeData, QSize
-from PyQt6.QtGui import QIcon, QAction, QDrag
+from PyQt6.QtGui import QIcon, QAction, QDrag, QMouseEvent
 from app.core.models import Step, Condition, Action, StepType, ConditionType, ActionType
 
+class ClickableFrame(QFrame):
+    clicked = pyqtSignal()
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+        else:
+            super().mousePressEvent(event)
+
 class StepCardWidget(QWidget):
+    step_selected = pyqtSignal(Step) # Signal to notify canvas/editor of specific selection
+    
     def __init__(self, step: Step, index_str: str):
         super().__init__()
-        layout = QHBoxLayout()
-        layout.setContentsMargins(5, 5, 5, 5)
-        self.setLayout(layout)
+        self.step = step
+        self.layout = QHBoxLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
+        self.setLayout(self.layout)
         
-        # 1. Index (e.g. "1.1", "2")
+        # Check if AWAIT with child -> "Two Slot" Mode
+        self.child_step = None
+        if step.type == StepType.AWAIT and step.children:
+            self.child_step = step.children[0]
+            
+        if self.child_step:
+            self._init_composite_ui(index_str)
+        else:
+            self._init_standard_ui(index_str)
+
+    def _init_standard_ui(self, index_str):
+        self.layout.setContentsMargins(5, 5, 5, 5)
+        self.layout.setSpacing(10)
+        
+        # 1. Index
         self.idx_label = QLabel(f"#{index_str}")
-        self.idx_label.setStyleSheet("font-weight: bold; color: #888; margin-right: 5px;")
-        layout.addWidget(self.idx_label)
+        self.idx_label.setStyleSheet("font-weight: bold; color: #888;")
+        self.layout.addWidget(self.idx_label)
         
         # 2. Name
-        self.name_label = QLabel(step.name)
-        self.name_label.setStyleSheet("font-weight: bold; font-size: 14px; margin-right: 10px;")
-        layout.addWidget(self.name_label)
+        name_text = self.step.name
+        self.name_label = QLabel(name_text)
+        self.name_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.layout.addWidget(self.name_label)
         
-        # 3. Detail (Middle, Variable)
-        detail_text = self._get_detail(step)
+        # 3. Detail
+        detail_text = self._get_detail(self.step)
         self.detail_label = QLabel(detail_text)
         self.detail_label.setStyleSheet("color: #444;")
-        layout.addWidget(self.detail_label)
+        self.layout.addWidget(self.detail_label)
         
-        # Spacer
-        layout.addStretch()
+        self.layout.addStretch()
         
-        # 4. Type (Right)
-        type_str = self._get_type_str(step)
+        # 4. Type
+        type_str = self._get_type_str(self.step)
         self.type_label = QLabel(type_str)
         self.type_label.setStyleSheet("color: #888; font-size: 11px;")
-        layout.addWidget(self.type_label)
+        self.layout.addWidget(self.type_label)
+
+    def _init_composite_ui(self, index_str):
+        # Frame 1: Parent (Await)
+        frame_parent = ClickableFrame()
+        frame_parent.setStyleSheet("QFrame { background-color: #f0f0f0; border-radius: 4px; border: 1px solid #ccc; } QFrame:hover { background-color: #e0e0e0; }")
+        frame_parent.clicked.connect(lambda: self.step_selected.emit(self.step))
+        
+        layout_p = QHBoxLayout()
+        frame_parent.setLayout(layout_p)
+        layout_p.setContentsMargins(5, 2, 5, 2)
+        
+        lbl_idx = QLabel(f"#{index_str}")
+        lbl_idx.setStyleSheet("font-weight: bold; color: #555;")
+        lbl_name = QLabel("Await")
+        lbl_name.setStyleSheet("font-weight: bold; color: #000;")
+        lbl_info = QLabel(f"{self.step.condition.retry_timeout_s}s")
+        lbl_info.setStyleSheet("color: #666; font-size: 11px;")
+        
+        layout_p.addWidget(lbl_idx)
+        layout_p.addWidget(lbl_name)
+        layout_p.addWidget(lbl_info)
+        
+        # Frame 2: Child (e.g. Find Image)
+        frame_child = ClickableFrame()
+        frame_child.setStyleSheet("QFrame { background-color: #e6f3ff; border-radius: 4px; border: 1px solid #0066cc; } QFrame:hover { background-color: #d0e8ff; }")
+        frame_child.clicked.connect(lambda: self.step_selected.emit(self.child_step))
+        
+        layout_c = QHBoxLayout()
+        frame_child.setLayout(layout_c)
+        layout_c.setContentsMargins(5, 2, 5, 2)
+        
+        child_type = self._get_type_str(self.child_step)
+        child_name = self.child_step.name
+        child_detail = self._get_detail(self.child_step)
+        
+        lbl_c_icon = QLabel("↳") # Arrow icon
+        lbl_c_name = QLabel(child_name)
+        lbl_c_name.setStyleSheet("font-weight: bold; color: #004488;")
+        lbl_c_detail = QLabel(child_detail)
+        lbl_c_detail.setStyleSheet("color: #004488; font-size: 11px;")
+        
+        layout_c.addWidget(lbl_c_icon)
+        layout_c.addWidget(lbl_c_name)
+        layout_c.addWidget(lbl_c_detail)
+        layout_c.addStretch()
+        
+        # Add to main layout
+        self.layout.addWidget(frame_parent, 1) # Stretch 1
+        self.layout.addSpacing(5)
+        self.layout.addWidget(frame_child, 3) # Stretch 3 (Child gets more space)
         
     def _get_type_str(self, step: Step) -> str:
         if step.type == StepType.IF:
             return "IF"
         elif step.type == StepType.UNTIL:
             return "UNTIL"
+        elif step.type == StepType.AWAIT:
+            return "AWAIT"
         elif step.condition.type == ConditionType.IMAGE:
             return "Image"
         elif step.condition.type == ConditionType.COLOR:
@@ -66,6 +149,14 @@ class StepCardWidget(QWidget):
         # 2. Find Color
         if step.condition.type == ConditionType.COLOR:
              return f"Target: {step.condition.target_color}"
+        
+        # 3. Find Image
+        if step.condition.type == ConditionType.IMAGE:
+             path = step.condition.target_image_path
+             if path:
+                 import os
+                 return f"...{os.path.basename(path)}"
+             return "No Image"
              
         # 3. Goto
         if step.action.type == ActionType.GOTO:
@@ -82,6 +173,8 @@ class WorkflowCanvasWidget(QTreeWidget):
     step_dropped = pyqtSignal(str, str, object)  # category, type, parent_item (can be None)
     delete_requested = pyqtSignal()
     reordered = pyqtSignal() # Needs complex handling for tree reorder, simplification: just sync model
+    step_clicked = pyqtSignal(Step) # New signal for internal clicks
+
     
     def __init__(self):
         super().__init__()
@@ -157,8 +250,29 @@ class WorkflowCanvasWidget(QTreeWidget):
                 # But widget creation happens after item is added.
                 pass
         
+                # Create Widget
+                widget = StepCardWidget(step, idx_str)
+                widget.step_selected.connect(self.step_clicked.emit) # Forward signal
+                self.setItemWidget(item, 0, widget)
+                
+                # Recursion for children
+                if step.children:
+                    # SPECIAL CASE: For AWAIT with 1 child, we visualised it inline in the parent widget.
+                    # Technically, we should still traverse to keep the tree structure valid for drag/drop?
+                    # BUT, if we show the child node, it will be duplicated visually.
+                    # So, if AWAIT has children, and we used Inline mode, we should NOT create a tree item for the first child?
+                    # Or create it but HIDDEN? Creating it hidden is safer for logic involving indices/traversal.
+                    
+                    hide_first_child = (step.type == StepType.AWAIT and len(step.children) >= 1)
+                    
+                    # Pass a custom flag or handle logic?
+                    # Let's just pass logic to child_builder
+                    build_tree(step.children, item, f"{idx_str}.", hide_first_child=hide_first_child)
+                else:
+                    item.setExpanded(True)
+
         # Recursive function with index tracking
-        def build_tree(current_steps, parent_item=None, prefix=""):
+        def build_tree(current_steps, parent_item=None, prefix="", hide_first_child=False):
             for i, step in enumerate(current_steps):
                 idx_str = f"{prefix}{i+1}"
                 
@@ -169,13 +283,28 @@ class WorkflowCanvasWidget(QTreeWidget):
                 
                 item.setData(0, Qt.ItemDataRole.UserRole, step)
                 
+                # Check if this item is the one we should hide?
+                if i == 0 and hide_first_child:
+                    # HIDDEN ITEM
+                    item.setHidden(True)
+                    # We still need the widget? No, visual is improved in parent.
+                    # But we might need widget for selection callbacks?
+                    # The parent's "Right Slot" click will select this step object.
+                    # Inspector just needs the object.
+                    # BUT, if we want `setCurrentItem` to work (for delete/highlight), the item must exist.
+                    # Hidden items can be selected programmatically? Yes.
+                    pass
+                
                 # Create Widget
                 widget = StepCardWidget(step, idx_str)
+                widget.step_selected.connect(self.step_clicked.emit)
                 self.setItemWidget(item, 0, widget)
                 
-                # Recursion for children
+                # Detect inline mode for THIS step
+                is_await_inline = (step.type == StepType.AWAIT and len(step.children) >= 1)
+                
                 if step.children:
-                    build_tree(step.children, item, f"{idx_str}.")
+                    build_tree(step.children, item, f"{idx_str}.", hide_first_child=is_await_inline)
                 
                 item.setExpanded(True) # Default expand
 
