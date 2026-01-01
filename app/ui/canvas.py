@@ -188,16 +188,21 @@ class WorkflowCanvasWidget(QTreeWidget):
 
     def __init__(self):
         super().__init__()
-        # ... (unchanged)
+        self.setAcceptDrops(True)
+        self.setDragEnabled(True)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
+        self.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.setAlternatingRowColors(True)
+        self.setHeaderHidden(True)
+        self.setIndentation(20) # Indent for children
 
     def mimeTypes(self):
         types = super().mimeTypes()
         types.append("application/vnd.antigravity.step-type")
         return types
 
-    # ... (unchanged methods)
-
-    def dragMoveEvent(self, event):
+    def dropEvent(self, event):
         if event.mimeData().hasFormat("application/vnd.antigravity.step-type"):
              # Now that mimeTypes() includes our type, super() handles indicators and flags!
              super().dragMoveEvent(event)
