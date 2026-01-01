@@ -56,17 +56,91 @@ def find_image_on_screen(
     except Exception as e:
         logger.error(f"DEBUG_IMAGE: Error saving debug info: {e}")
 
-    # 1. Try Standard Search
+    # 1. Try Standard Search with Retina-Aware Capture
     try:
-        matches = list(pyautogui.locateAllOnScreen(
-            target_image_path,
-            confidence=confidence,
-            region=region,
-            grayscale=grayscale
-        ))
-        logger.debug(f"DEBUG_IMAGE: Found {len(matches)} matches (Standard)")
-    except (pyautogui.ImageNotFoundException, Exception) as e:
-        logger.debug(f"DEBUG_IMAGE: Standard search failed/empty: {e}")
+        # Proposed Fix: pyautogui.locateAllOnScreen(region=...) might capture at 1x on Retina.
+        # Instead, we capture Full Screen (usually 2x on Retina) and crop manually.
+        
+        # A. Capture Full Screen
+        full_ss = pyautogui.screenshot()
+        haystack = np.array(full_ss)
+        
+        # Handle RGBA
+        if haystack.shape[2] == 4:
+            haystack = haystack[:, :, :3]
+        haystack = cv2.cvtColor(haystack, cv2.COLOR_RGB2BGR)
+
+        # B. Crop Region if provided
+        search_img = haystack
+        crop_offset_x, crop_offset_y = 0, 0
+        
+        if region:
+            # region is Logical [x, y, w, h]
+            rx, ry, rw, rh = region
+            
+            # Determine Scale (Physical Width / Logical Width)
+            # We assume Mac screen width in points... strict way:
+            from app.utils.screen_utils import get_screen_scale
+            scale = get_screen_scale() 
+            # Or dedeuce from haystack width?
+            # get_screen_scale() uses Qt which is reliable.
+            
+            # If haystack is 2x larger than screen geometry, scale is 2.
+            # But simpler to just use get_screen_scale.
+            
+            # Verify if haystack is actually scaled
+            # If scale is 2.0, we expect haystack width to be screen_width * 2
+            
+            # Calculate Physical Region
+            px = int(rx * scale)
+            py = int(ry * scale)
+            pw = int(rw * scale)
+            ph = int(rh * scale)
+            
+            # Clamp to image bounds
+            h_h, h_w = haystack.shape[:2]
+            px = max(0, min(px, h_w))
+            py = max(0, min(py, h_h))
+            pw = max(0, min(pw, h_w - px))
+            ph = max(0, min(ph, h_h - py))
+            
+            if pw > 0 and ph > 0:
+                search_img = haystack[py:py+ph, px:px+pw]
+                crop_offset_x, crop_offset_y = px, py
+                logger.debug(f"DEBUG_IMAGE: Manual Crop (Scale={scale}): Region({rx},{ry}) -> Crop({px},{py},{pw},{ph})")
+            else:
+                logger.warning("DEBUG_IMAGE: Crop region is empty or out of bounds.")
+                return []
+        
+        # C. Perform Search on 'search_img' using OpenCV directly (Skip PyAutoGUI wrapper for control)
+        # Load Template
+        if not os.path.exists(target_image_path):
+             logger.error(f"Template not found: {target_image_path}")
+             return []
+             
+        template = cv2.imread(target_image_path)
+        if template is None: return []
+        
+        # Match
+        res = cv2.matchTemplate(search_img, template, cv2.TM_CCOEFF_NORMED)
+        
+        # Threshold
+        loc = np.where(res >= confidence)
+        
+        matches = []
+        t_h, t_w = template.shape[:2]
+        for pt in zip(*loc[::-1]): # (x, y)
+            # pt is in search_img coordinates (Physical)
+            # Global Physical X = crop_offset_x + pt[0]
+            g_phys_x = crop_offset_x + pt[0]
+            g_phys_y = crop_offset_y + pt[1]
+            
+            matches.append(pyautogui.Box(g_phys_x, g_phys_y, t_w, t_h))
+            
+        logger.debug(f"DEBUG_IMAGE: Found {len(matches)} matches (Manual 2x)")
+
+    except Exception as e:
+        logger.error(f"DEBUG_IMAGE: Manual search failed: {e}")
         pass
         
     if matches:
