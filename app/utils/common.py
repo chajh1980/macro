@@ -28,3 +28,6 @@ def get_project_root() -> str:
 
 def get_workflows_dir() -> str:
     return os.path.join(get_project_root(), "workflows")
+
+def get_app_dir() -> str:
+    return get_project_root()

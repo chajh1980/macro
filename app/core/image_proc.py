@@ -139,16 +139,18 @@ def find_color_on_screen(
         g = int(target_hex[2:4], 16)
         b = int(target_hex[4:6], 16)
         
+        print(f"DEBUG_COLOR: TargetHex={target_hex}, RGB=({r},{g},{b}), BGR=({b},{g},{r})")
+        
         # 2. Capture Screen
         screenshot = pyautogui.screenshot(region=region)
         img = np.array(screenshot)
+        print(f"DEBUG_COLOR: Captured Image Shape={img.shape}")
         
         # DEBUG: Save screenshot to verify what we are searching (User requested)
         import os
         from app.utils.common import get_app_dir
         debug_path = os.path.join(get_app_dir(), "debug_color_search.png")
-        if not os.path.exists(get_app_dir()):
-            os.makedirs(get_app_dir())
+        print(f"DEBUG_COLOR: Saving debug image to {debug_path}")
         cv2.imwrite(debug_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR)) # Save original capture
         
         # Handle RGBA (Mac) -> RGB
@@ -166,6 +168,7 @@ def find_color_on_screen(
         
         # 4. Find Contours (Connected Components)
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        print(f"DEBUG_COLOR: Found {len(contours)} contours")
         
         matches = []
         for cnt in contours:
@@ -186,4 +189,6 @@ def find_color_on_screen(
         
     except Exception as e:
         logger.error(f"Error in find_color_on_screen: {e}")
+        import traceback
+        traceback.print_exc()
         return []
