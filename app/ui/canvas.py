@@ -10,6 +10,11 @@ class ClickableFrame(QFrame):
         super().__init__(parent)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         
+    def mimeTypes(self):
+        types = super().mimeTypes()
+        types.append("application/vnd.antigravity.step-type")
+        return types
+
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit()
@@ -191,6 +196,17 @@ class WorkflowCanvasWidget(QTreeWidget):
         # ... (unchanged)
 
     # ... (unchanged methods)
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasFormat("application/vnd.antigravity.step-type"):
+             # Now that mimeTypes() includes our type, super() handles indicators and flags!
+             super().dragMoveEvent(event)
+             # Force accept action to Copy
+             event.setDropAction(Qt.DropAction.CopyAction)
+             event.accept()
+        else:
+            # Internal Drag (Reorder)
+            super().dragMoveEvent(event)
 
     def dropEvent(self, event):
         if event.mimeData().hasFormat("application/vnd.antigravity.step-type"):
