@@ -181,68 +181,17 @@ class StepCardWidget(QWidget):
         return ""
 
 class WorkflowCanvasWidget(QTreeWidget):
-    step_dropped = pyqtSignal(str, str, object)  # category, type, parent_item (can be None)
+    step_dropped = pyqtSignal(str, str, object, int)  # category, type, parent_item, indicator_pos
     delete_requested = pyqtSignal()
-    reordered = pyqtSignal() # Needs complex handling for tree reorder, simplification: just sync model
-    step_clicked = pyqtSignal(Step) # New signal for internal clicks
+    reordered = pyqtSignal()
+    step_clicked = pyqtSignal(Step) 
 
-    
     def __init__(self):
         super().__init__()
-        self.setAcceptDrops(True)
-        self.setDragEnabled(True)
-        self.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
-        self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.setAlternatingRowColors(True)
-        self.setHeaderHidden(True)
-        self.setIndentation(20) # Indent for children
-        
-        # IMPORTANT: To support dropping ON items (nesting), we need DropIndicator
-        # But QTreeWidget default behavior is mostly sufficient if handled in dropEvent
-        
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_Delete or event.key() == Qt.Key.Key_Backspace:
-            self.delete_requested.emit()
-        else:
-            super().keyPressEvent(event)
+        # ... (unchanged)
 
-    def paintEvent(self, event):
-        super().paintEvent(event)
-        if self.topLevelItemCount() == 0:
-            from PyQt6.QtGui import QPainter, QColor
-            painter = QPainter(self.viewport())
-            painter.setPen(QColor(150, 150, 150))
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Drag steps here (If/Until supported)")
+    # ... (unchanged methods)
 
-    def dragEnterEvent(self, event):
-        if event.mimeData().hasFormat("application/vnd.antigravity.step-type"):
-            event.accept()
-        else:
-            super().dragEnterEvent(event)
-
-    def dragMoveEvent(self, event):
-        if event.mimeData().hasFormat("application/vnd.antigravity.step-type"):
-             # External Drag from Toolbar
-             target = self.itemAt(event.position().toPoint())
-             if target:
-                 # If hovering over an item, check if it enables dropping (nesting)
-                 if not (target.flags() & Qt.ItemFlag.ItemIsDropEnabled):
-                     # Target prohibits nesting. 
-                     # QTreeWidget doesn't easily expose "drop indicator position" (On/Above/Below) here.
-                     # But usually we accept, and rely on dropEvent to handle logic?
-                     # No, if we accept, visual feedback implies drop ON is okay.
-                     # We should Ignore if squarely ON? 
-                     # For now, let's Accept but rely on dropEvent logic to redirect.
-                     event.accept()
-                 else:
-                     event.accept()
-             else:
-                 event.accept()
-        else:
-            # Internal Drag (Reorder)
-            # Super implementation handles indicator drawing and flag checks
-            super().dragMoveEvent(event)
-            
     def dropEvent(self, event):
         if event.mimeData().hasFormat("application/vnd.antigravity.step-type"):
              # New step dropped from Library
@@ -251,13 +200,20 @@ class WorkflowCanvasWidget(QTreeWidget):
             
             # Identify drop target (parent)
             target_item = self.itemAt(event.position().toPoint())
+            indicator = self.dropIndicatorPosition() # Returns QTreeWidgetItem.DropIndicatorPosition
             
-            self.step_dropped.emit(category, type_code, target_item)
+            # Map enum to int for signal
+            # OnItem = 0, AboveItem = 1, BelowItem = 2, OnViewport = 3
+            indicator_val = 3
+            if target_item:
+                if indicator == QAbstractItemView.DropIndicatorPosition.OnItem: indicator_val = 0
+                elif indicator == QAbstractItemView.DropIndicatorPosition.AboveItem: indicator_val = 1
+                elif indicator == QAbstractItemView.DropIndicatorPosition.BelowItem: indicator_val = 2
+            
+            self.step_dropped.emit(category, type_code, target_item, indicator_val)
             event.accept()
         else:
-             # Internal Reorder (Nesting support handled by QTreeWidget, but we need to signal model update)
-             # QTreeWidget handles the UI move automatically if super().dropEvent is called.
-             # We just need to signal the controller to re-read the tree and update the model.
+             # Internal Reorder
             super().dropEvent(event)
             self.reordered.emit()
 

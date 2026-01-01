@@ -127,7 +127,8 @@ class WorkflowEditor(QMainWindow):
     def _refresh_canvas(self):
         self.canvas.update_steps(self.workflow.steps)
 
-    def _on_step_dropped(self, category, type_code, target_item=None):
+    def _on_step_dropped(self, category, type_code, target_item=None, indicator_pos=3):
+        # ... (Step creation logic unchanged) ...
         # 1. Create New Step
         new_step = Step(
             id=str(len(self.workflow.steps) + 1), # Temporary ID generation approach
@@ -183,21 +184,47 @@ class WorkflowEditor(QMainWindow):
                 new_step.name = "Await"
                 new_step.condition.type = ConditionType.TIME # Default, specific policy set in properties
         
-        # 3. Insert Logic (Handling Nesting)
+        # 3. Insert Logic (Handling Nesting and Order)
+        # indicator_pos: 0=OnItem, 1=AboveItem, 2=BelowItem, 3=OnViewport
+        
+        inserted = False
+        
         if target_item:
-            # Dropped ON another item -> Add as child IF container
-            parent_step = target_item.data(0, Qt.ItemDataRole.UserRole)
-            if parent_step and parent_step.type in [StepType.IF, StepType.UNTIL, StepType.AWAIT]:
-                parent_step.children.append(new_step)
-            else:
-                # Dropped on leaf -> Add as sibling AFTER? Or just append to root for simplicity now?
-                # For Phase 1 of Tree: Just append to root unless explicitly dropped into container.
-                # Actually, QTreeWidget drops usually mean "insert between". 
-                # But our signal implementation just passes 'target_item'.
-                # Let's simplify: If dropped on container, add as child. Else append to root.
-                self.workflow.steps.append(new_step)
-        else:
-             self.workflow.steps.append(new_step)
+            target_step = target_item.data(0, Qt.ItemDataRole.UserRole)
+            
+            # Find parent of target (to know where to insert if siblings)
+            parent_item = target_item.parent()
+            parent_step = parent_item.data(0, Qt.ItemDataRole.UserRole) if parent_item else None
+            # Target List: If parent exists, use parent.children. Else use self.workflow.steps.
+            target_list = parent_step.children if parent_step else self.workflow.steps
+            
+            # Find index of target_step in target_list
+            # Note: target_step object must be in target_list
+            try:
+                target_idx = target_list.index(target_step)
+            except ValueError:
+                target_idx = len(target_list) # Should not happen unless sync issue
+            
+            if indicator_pos == 0: # On Item -> Try Nesting
+                if target_step and target_step.type in [StepType.IF, StepType.UNTIL, StepType.AWAIT]:
+                    target_step.children.append(new_step)
+                    inserted = True
+                else:
+                    # Dropped ON non-container -> Treat as Insert After (or Before? Default to After)
+                    target_list.insert(target_idx + 1, new_step)
+                    inserted = True
+                    
+            elif indicator_pos == 1: # Above Item
+                target_list.insert(target_idx, new_step)
+                inserted = True
+                
+            elif indicator_pos == 2: # Below Item
+                target_list.insert(target_idx + 1, new_step)
+                inserted = True
+                
+        if not inserted:
+            # Append to root
+            self.workflow.steps.append(new_step)
 
         self.has_unsaved_changes = True
         self._refresh_canvas()
