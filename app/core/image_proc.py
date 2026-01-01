@@ -27,18 +27,36 @@ def find_image_on_screen(
         import os
         
         # 0. Capture what PyAutoGUI sees (for debugging)
-        # Note: pyautogui.locateAllOnScreen does its own capture, but we can't see it.
-        # So we manually capture to verify.
-        debug_ss = pyautogui.screenshot(region=region)
-        debug_img = np.array(debug_ss)
+        # Use High-Res Capture (Full Screen + Crop) to match the new search logic
+        full_debug_ss = pyautogui.screenshot()
+        debug_ss_np = np.array(full_debug_ss)
         
         # Handle RGBA
-        if debug_img.shape[2] == 4:
-            debug_img = debug_img[:, :, :3]
+        if debug_ss_np.shape[2] == 4:
+            debug_ss_np = debug_ss_np[:, :, :3]
+        debug_ss_np = cv2.cvtColor(debug_ss_np, cv2.COLOR_RGB2BGR)
         
-        # Convert RGB to BGR for OpenCV
-        debug_img = cv2.cvtColor(debug_img, cv2.COLOR_RGB2BGR)
+        debug_img = debug_ss_np
         
+        if region:
+            from app.utils.screen_utils import get_screen_scale
+            scale = get_screen_scale()
+            
+            rx, ry, rw, rh = region
+            px = int(rx * scale)
+            py = int(ry * scale)
+            pw = int(rw * scale)
+            ph = int(rh * scale)
+            
+            h_h, h_w = debug_ss_np.shape[:2]
+            px = max(0, min(px, h_w))
+            py = max(0, min(py, h_h))
+            pw = max(0, min(pw, h_w - px))
+            ph = max(0, min(ph, h_h - py))
+            
+            if pw > 0 and ph > 0:
+                debug_img = debug_ss_np[py:py+ph, px:px+pw]
+            
         debug_path = os.path.join(get_app_dir(), "debug_image_search_capture.png")
         cv2.imwrite(debug_path, debug_img)
         logger.debug(f"DEBUG_IMAGE: Saved capture to {debug_path} (Shape={debug_img.shape})")
