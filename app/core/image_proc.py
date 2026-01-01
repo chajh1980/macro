@@ -208,8 +208,8 @@ def find_color_on_screen(
         matches = []
         for cnt in contours:
             x, y, w, h = cv2.boundingRect(cnt)
-            # Filter tiny noise (Require at least 5px dimensions)
-            if w >= 5 and h >= 5:
+            # Filter tiny noise (Require at least 2px dimensions)
+            if w >= 2 and h >= 2:
                 
                 # Normalize to Physical Coordinates (2x)
                 if capture_scale == 1.0 and scale > 1.0:
