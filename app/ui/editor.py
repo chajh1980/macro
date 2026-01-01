@@ -382,7 +382,7 @@ class WorkflowEditor(QMainWindow):
                 matches = find_image_on_screen(
                     path, 
                     confidence=step.condition.confidence or 0.9,
-                    region=None # Todo: handle watch_area logic
+                    region=step.condition.watch_area
                 )
                 
                 if matches:
@@ -431,6 +431,67 @@ class WorkflowEditor(QMainWindow):
                     QMessageBox.warning(self, "Test Result", "Image NOT Found.")
             except Exception as e:
                 QMessageBox.critical(self, "Test Error", str(e))
+
+        elif step.condition.type == ConditionType.COLOR and step.condition.target_color:
+             from app.core.image_proc import find_color_on_screen
+             import pyautogui
+             try:
+                 region = None
+                 if step.condition.watch_area:
+                     # watch_area is usually [x, y, w, h] (Logic? Or Physical?)
+                     # It comes from _on_area_captured which stores logical coords (rect.x(), rect.y())
+                     # BUT pyautogui.screenshot(region=...) usually expects physical pixels on Mac if Retina? or logical?
+                     # Let's check handle_condition logic.
+                     # Actually find_color_on_screen calls pyautogui.screenshot(region=region).
+                     # PyAutoGUI region is (left, top, width, height).
+                     # We should assume watch_area is stored in logical, so we might need to scale it if pyautogui expects physical.
+                     # BUT wait, previously we said overlay returns logical.
+                     # Let's trust find_color_on_screen handles it or pass it as is for now.
+                     region = tuple(step.condition.watch_area)
+
+                 matches = find_color_on_screen(
+                     step.condition.target_color,
+                     tolerance=step.condition.color_tolerance,
+                     region=region
+                 )
+
+                 if matches:
+                     # Respect Match Index
+                     idx = step.condition.match_index
+                     if idx >= len(matches):
+                         idx = 0 # Default to first if overflow
+
+                     match = matches[idx]
+                     
+                     from app.utils.screen_utils import get_screen_scale
+                     scale = get_screen_scale()
+                     
+                     # Convert Physical -> Logical
+                     x = int(match[0] / scale)
+                     y = int(match[1] / scale)
+                     w = int(match[2] / scale)
+                     h = int(match[3] / scale)
+                     
+                     rect = QRect(x, y, w, h)
+                     
+                     self.highlight_overlay = Overlay(mode="highlight", highlight_rect=rect)
+                     self.highlight_overlay.show()
+                     
+                     center_x = x + w // 2
+                     center_y = y + h // 2
+                     
+                     pyautogui.moveTo(center_x, center_y)
+                     
+                     msg = QMessageBox(self)
+                     msg.setWindowTitle("Test Result")
+                     msg.setText(f"Color Found (Match #{idx+1})!\nMoved mouse to ({center_x}, {center_y}).")
+                     msg.setIcon(QMessageBox.Icon.Information)
+                     msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+                     msg.exec()
+                 else:
+                     QMessageBox.warning(self, "Test Result", "Color NOT Found.")
+             except Exception as e:
+                 QMessageBox.critical(self, "Test Error", str(e))
         
         elif step.action.type == ActionType.MOVE:
              # Visual verification for Move
