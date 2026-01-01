@@ -81,9 +81,12 @@ class StepPropertiesWidget(QWidget):
         row_img_offset.addWidget(self.img_offset_y)
         
         # Retry Policy (Await) for Image
-        grp_retry = QGroupBox("Retry Policy (Await)")
+        # Retry Policy (Await) for Image
+        self.grp_retry_img = QGroupBox("Retry Policy (Await)")
+        self.grp_retry_img.setCheckable(True)
+        self.grp_retry_img.setChecked(False)
         layout_retry = QFormLayout()
-        grp_retry.setLayout(layout_retry)
+        self.grp_retry_img.setLayout(layout_retry)
         
         self.retry_timeout = QDoubleSpinBox()
         self.retry_timeout.setRange(0, 3600)
@@ -101,7 +104,7 @@ class StepPropertiesWidget(QWidget):
         p_img_layout.addRow("Confidence:", self.img_confidence)
         p_img_layout.addRow("Search Area:", row_img_area)
         p_img_layout.addRow("Move Offset:", row_img_offset)
-        p_img_layout.addRow(grp_retry) # Add Retry Group
+        p_img_layout.addRow(self.grp_retry_img) # Add Retry Group
         
         self.stack.addWidget(self.page_image)
         
@@ -144,9 +147,12 @@ class StepPropertiesWidget(QWidget):
         row_color_area.addWidget(self.color_set_area_btn)
         
         # Retry Policy (Await) for Color - Shared Widgets? No, separate for safety/simplicity
-        grp_retry_color = QGroupBox("Retry Policy (Await)")
+        # Retry Policy (Await) for Color
+        self.grp_retry_color = QGroupBox("Retry Policy (Await)")
+        self.grp_retry_color.setCheckable(True)
+        self.grp_retry_color.setChecked(False)
         layout_retry_color = QFormLayout()
-        grp_retry_color.setLayout(layout_retry_color)
+        self.grp_retry_color.setLayout(layout_retry_color)
         
         self.retry_timeout_color = QDoubleSpinBox()
         self.retry_timeout_color.setRange(0, 3600)
@@ -163,7 +169,7 @@ class StepPropertiesWidget(QWidget):
         p_color_layout.addRow("Tolerance:", self.color_tolerance)
         p_color_layout.addRow("Match Index:", self.color_match_index)
         p_color_layout.addRow("Search Area:", row_color_area)
-        p_color_layout.addRow(grp_retry_color) # Add Retry Group
+        p_color_layout.addRow(self.grp_retry_color) # Add Retry Group
         
         self.stack.addWidget(self.page_color)
         
@@ -270,10 +276,14 @@ class StepPropertiesWidget(QWidget):
         self.goto_spin.valueChanged.connect(self._sync_data)
         
         # Retry Policy Signals
+        # Retry Policy Signals
         self.retry_timeout.valueChanged.connect(self._sync_data)
         self.retry_interval.valueChanged.connect(self._sync_data)
+        self.grp_retry_img.toggled.connect(self._sync_data)
+        
         self.retry_timeout_color.valueChanged.connect(self._sync_data)
         self.retry_interval_color.valueChanged.connect(self._sync_data)
+        self.grp_retry_color.toggled.connect(self._sync_data)
 
     def _on_combo_changed(self, index):
         self.stack.setCurrentIndex(index)
@@ -333,8 +343,12 @@ class StepPropertiesWidget(QWidget):
         else:
              self.img_full_window_cb.setChecked(True)
         # Retry Image
-        self.retry_timeout.setValue(step.condition.retry_timeout_s if step.condition.retry_timeout_s is not None else 5.0)
-        self.retry_interval.setValue(step.condition.retry_interval_ms if step.condition.retry_interval_ms is not None else 500)
+        if step.condition.retry_timeout_s is not None:
+             self.grp_retry_img.setChecked(True)
+             self.retry_timeout.setValue(step.condition.retry_timeout_s)
+             self.retry_interval.setValue(step.condition.retry_interval_ms or 500)
+        else:
+             self.grp_retry_img.setChecked(False)
              
         # 1. Color
         self.color_val_edit.setText(step.condition.target_color or "#FFFFFF")
@@ -347,8 +361,12 @@ class StepPropertiesWidget(QWidget):
              self.color_full_window_cb.setChecked(True)
         self._update_color_preview(step.condition.target_color or "#FFFFFF")
         # Retry Color
-        self.retry_timeout_color.setValue(step.condition.retry_timeout_s if step.condition.retry_timeout_s is not None else 5.0)
-        self.retry_interval_color.setValue(step.condition.retry_interval_ms if step.condition.retry_interval_ms is not None else 500)
+        if step.condition.retry_timeout_s is not None:
+             self.grp_retry_color.setChecked(True)
+             self.retry_timeout_color.setValue(step.condition.retry_timeout_s)
+             self.retry_interval_color.setValue(step.condition.retry_interval_ms or 500)
+        else:
+             self.grp_retry_color.setChecked(False)
         
         # 2. Offsets (Image action uses Move params too)
         # ... existing ...
@@ -387,8 +405,13 @@ class StepPropertiesWidget(QWidget):
             self.current_step.action.target_x = self.img_offset_x.value()
             self.current_step.action.target_y = self.img_offset_y.value()
             # Retry
-            self.current_step.condition.retry_timeout_s = self.retry_timeout.value()
-            self.current_step.condition.retry_interval_ms = self.retry_interval.value()
+            # Retry
+            if self.grp_retry_img.isChecked():
+                self.current_step.condition.retry_timeout_s = self.retry_timeout.value()
+                self.current_step.condition.retry_interval_ms = self.retry_interval.value()
+            else:
+                self.current_step.condition.retry_timeout_s = None
+                self.current_step.condition.retry_interval_ms = None
             
             try:
                 txt = self.img_watch_area_edit.text()
@@ -402,8 +425,13 @@ class StepPropertiesWidget(QWidget):
             self.current_step.condition.color_tolerance = self.color_tolerance.value()
             self.current_step.condition.match_index = self.color_match_index.value()
             # Retry
-            self.current_step.condition.retry_timeout_s = self.retry_timeout_color.value()
-            self.current_step.condition.retry_interval_ms = self.retry_interval_color.value()
+            # Retry
+            if self.grp_retry_color.isChecked():
+                self.current_step.condition.retry_timeout_s = self.retry_timeout_color.value()
+                self.current_step.condition.retry_interval_ms = self.retry_interval_color.value()
+            else:
+                self.current_step.condition.retry_timeout_s = None
+                self.current_step.condition.retry_interval_ms = None
             
             try:
                 txt = self.color_watch_area_edit.text()
