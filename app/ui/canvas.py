@@ -10,11 +10,6 @@ class ClickableFrame(QFrame):
         super().__init__(parent)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         
-    def mimeTypes(self):
-        types = super().mimeTypes()
-        types.append("application/vnd.antigravity.step-type")
-        return types
-
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit()
@@ -194,6 +189,11 @@ class WorkflowCanvasWidget(QTreeWidget):
     def __init__(self):
         super().__init__()
         # ... (unchanged)
+
+    def mimeTypes(self):
+        types = super().mimeTypes()
+        types.append("application/vnd.antigravity.step-type")
+        return types
 
     # ... (unchanged methods)
 
