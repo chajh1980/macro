@@ -269,7 +269,6 @@ class WorkflowCanvasWidget(QTreeWidget):
                  step = target_item.data(0, Qt.ItemDataRole.UserRole)
                  flags = target_item.flags()
                  is_drop = bool(flags & Qt.ItemFlag.ItemIsDropEnabled)
-                 print(f"[DEBUG] Hover: {step.name if step else '?'}, DropEnabled={is_drop}")
             
             # Delegate to super for drawing indicators (lines/rects)
             super().dragMoveEvent(event)
@@ -307,8 +306,6 @@ class WorkflowCanvasWidget(QTreeWidget):
                 if indicator == QAbstractItemView.DropIndicatorPosition.OnItem: indicator_val = 0
                 elif indicator == QAbstractItemView.DropIndicatorPosition.AboveItem: indicator_val = 1
                 elif indicator == QAbstractItemView.DropIndicatorPosition.BelowItem: indicator_val = 2
-            
-            print(f"[DEBUG] Drop: Target={target_item.data(0, Qt.ItemDataRole.UserRole).name if target_item else 'None'}, Indicator={indicator_val} (Raw: {indicator})")
             
             self.step_dropped.emit(category, type_code, target_item, indicator_val)
             event.accept()
