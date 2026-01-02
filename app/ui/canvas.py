@@ -259,6 +259,22 @@ class WorkflowCanvasWidget(QTreeWidget):
         types = super().mimeTypes()
         types.append("application/vnd.antigravity.step-type")
         return types
+        
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasFormat("application/vnd.antigravity.step-type"):
+            # Check if we are hovering over a valid container
+            target_item = self.itemAt(event.position().toPoint())
+            if target_item:
+                 # We rely on flags() having ItemIsDropEnabled
+                 pass
+            
+            # Delegate to super for drawing indicators (lines/rects)
+            super().dragMoveEvent(event)
+            
+            # Force Accept for our custom type
+            event.accept()
+        else:
+            super().dragMoveEvent(event)
 
     def dropEvent(self, event):
         if event.mimeData().hasFormat("application/vnd.antigravity.step-type"):
