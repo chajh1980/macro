@@ -286,23 +286,11 @@ class StepPropertiesWidget(QWidget):
             return
         
         # 1. Goto Action (if not Loop type but Action GOTO)
+        # 1. Goto Action (Legacy/Deprecated map to Loop page?)
         elif step.action.type == ActionType.GOTO:
-            self.command_combo.setCurrentIndex(5) # Use same Index for now? 
-            # Wait, I replaced Page 5 (Goto) with Page Loop. 
-            # Does user still want simple "Goto"? 
-            # User said "Loop/Goto" in combo. 
-            # Let's assume Loop replaces Goto page completely for now, 
-            # OR Loop page supports Goto? 
-            # Actually, user logic for Goto was simple action.
-            # But in the UI update I replaced usage of Page 5 to be Loop.
-            # I should handle Goto separately or as a specific Loop mode?
-            # For simplicity: Keep Goto as Legacy? 
-            # Or if I overwrote Page 5, I should recover Goto support if needed.
-            # User previously had "Loop/Goto" in combo.
-            # I will assume "Goto" steps map to Loop page for now (or I broke Goto UI).
-            # Fix: If ActionType.GOTO, show basic Goto UI?
-            # I defined Page 5 as self.page_loop.
-            # I should probably differentiate "Loop" vs "Goto" in combo?
+            self.command_combo.setCurrentIndex(5) 
+            self.stack.setCurrentIndex(5)
+            # self.goto_spin.setValue(step.action.goto_step_index or 1) # Removed: goto_spin no longer exists
             pass
 
         # Determine Index for other step types
