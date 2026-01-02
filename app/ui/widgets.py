@@ -145,54 +145,12 @@ class StepPropertiesWidget(QWidget):
         self.loop_max_count = QSpinBox()
         self.loop_max_count.setRange(1, 99999)
         self.loop_max_count.setValue(100)
+        self.loop_max_count.setValue(100)
         layout_loop.addRow("Max Iterations (Safety):", self.loop_max_count)
         
-        # Loop Condition (Nested Group)
-        grp_cond = QGroupBox("Loop Condition")
-        layout_cond = QVBoxLayout()
-        grp_cond.setLayout(layout_cond)
+        layout_loop.addRow(QLabel("Note: The FIRST child step dropped into this Loop will act as the Condition."))
         
-        # Condition Type Selection
-        self.loop_cond_type = QComboBox()
-        self.loop_cond_type.addItems(["Image", "Color", "Text"])
-        layout_cond.addWidget(QLabel("Condition Type:"))
-        layout_cond.addWidget(self.loop_cond_type)
-        
-        # Condition Config Stack
-        self.loop_cond_stack = PyQt6.QtWidgets.QStackedWidget()
-        layout_cond.addWidget(self.loop_cond_stack)
-        
-        # -- Loop: Image Page --
-        p_l_img = QWidget(); l_l_img = QFormLayout(); p_l_img.setLayout(l_l_img)
-        self.l_img_path = QLineEdit()
-        self.l_img_btn = QPushButton("Capture")
-        row_l_img = QHBoxLayout(); row_l_img.addWidget(self.l_img_path); row_l_img.addWidget(self.l_img_btn)
-        self.l_img_conf = QDoubleSpinBox(); self.l_img_conf.setRange(0.1, 1.0); self.l_img_conf.setValue(0.9); self.l_img_conf.setSingleStep(0.05)
-        l_l_img.addRow("Image:", row_l_img)
-        l_l_img.addRow("Confidence:", self.l_img_conf)
-        self.loop_cond_stack.addWidget(p_l_img)
-        
-        # -- Loop: Color Page --
-        p_l_col = QWidget(); l_l_col = QFormLayout(); p_l_col.setLayout(l_l_col)
-        self.l_col_val = QLineEdit("#FFFFFF")
-        self.l_col_btn = QPushButton("Pick")
-        row_l_col = QHBoxLayout(); row_l_col.addWidget(self.l_col_val); row_l_col.addWidget(self.l_col_btn)
-        self.l_col_tol = QSpinBox(); self.l_col_tol.setRange(0, 100); self.l_col_tol.setValue(10)
-        l_l_col.addRow("Color:", row_l_col)
-        l_l_col.addRow("Tolerance:", self.l_col_tol)
-        self.loop_cond_stack.addWidget(p_l_col)
-
-        # -- Loop: Text Page --
-        p_l_txt = QWidget(); l_l_txt = QFormLayout(); p_l_txt.setLayout(l_l_txt)
-        self.l_txt_val = QLineEdit()
-        l_l_txt.addRow("Text:", self.l_txt_val)
-        self.loop_cond_stack.addWidget(p_l_txt)
-        
-        layout_loop.addRow(grp_cond)
         self.stack.addWidget(self.page_loop)
-        
-        # Connect Loop Condition Type to Stack
-        self.loop_cond_type.currentIndexChanged.connect(self.loop_cond_stack.setCurrentIndex)
         
         # 6. Await
         self.page_await = QWidget()
@@ -303,19 +261,6 @@ class StepPropertiesWidget(QWidget):
             self.loop_mode_combo.setCurrentIndex(0 if step.condition.loop_mode == LoopMode.WHILE_FOUND else 1)
             self.loop_max_count.setValue(step.condition.loop_max_count or 100)
             
-            # Load Nested Condition Config
-            cond_type = step.condition.type
-            if cond_type == ConditionType.IMAGE:
-                self.loop_cond_type.setCurrentIndex(0)
-                self.l_img_path.setText(step.condition.target_image_path or "")
-                self.l_img_conf.setValue(step.condition.confidence or 0.9)
-            elif cond_type == ConditionType.COLOR:
-                self.loop_cond_type.setCurrentIndex(1)
-                self.l_col_val.setText(step.condition.target_color or "#FFFFFF")
-                self.l_col_tol.setValue(step.condition.color_tolerance or 10)
-            elif cond_type == ConditionType.TEXT:
-                self.loop_cond_type.setCurrentIndex(2)
-                self.l_txt_val.setText(step.condition.target_text or "")
             self.blockSignals(False)
             return
         
@@ -437,23 +382,7 @@ class StepPropertiesWidget(QWidget):
             self.current_step.condition.loop_mode = LoopMode.WHILE_FOUND if self.loop_mode_combo.currentIndex() == 0 else LoopMode.UNTIL_FOUND
             self.current_step.condition.loop_max_count = self.loop_max_count.value()
             
-            # Sync Nested Condition
-            c_idx = self.loop_cond_type.currentIndex()
-            if c_idx == 0: # Image
-                self.current_step.condition.type = ConditionType.IMAGE
-                self.current_step.condition.target_image_path = self.l_img_path.text()
-                self.current_step.condition.confidence = self.l_img_conf.value()
-            elif c_idx == 1: # Color
-                self.current_step.condition.type = ConditionType.COLOR
-                self.current_step.condition.target_color = self.l_col_val.text()
-                self.current_step.condition.color_tolerance = self.l_col_tol.value()
-            elif c_idx == 2: # Text
-                self.current_step.condition.type = ConditionType.TEXT
-                self.current_step.condition.target_text = self.l_txt_val.text()
-                
-            # Note: Loop step reuses 'condition' field for its nested condition logic
-            # This is consistent with 'Find Image' using 'condition' field.
-            # Engine will read 'loop_mode' AND 'condition.type' (Image/Color) from the same Condition object.
+            # Note: Loop Condition is now determined by the first child step.
 
         # 6. Await
         elif idx == 6:
