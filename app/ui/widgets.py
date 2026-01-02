@@ -213,7 +213,7 @@ class StepPropertiesWidget(QWidget):
         self.wait_spin.valueChanged.connect(self._sync_data)
         
         # Goto
-        self.goto_spin.valueChanged.connect(self._sync_data)
+        # self.goto_spin.valueChanged.connect(self._sync_data)
         
         # Await
         self.await_timeout.valueChanged.connect(self._sync_data)
@@ -335,7 +335,7 @@ class StepPropertiesWidget(QWidget):
              self.color_full_window_cb.setChecked(True)
              
         self.wait_spin.setValue(step.condition.wait_time_s)
-        self.goto_spin.setValue(step.action.goto_step_index or 1)
+        # self.goto_spin.setValue(step.action.goto_step_index or 1)
         
         # Await values are now set in the explicit AWAIT block above.
         # self.await_timeout.setValue(step.condition.retry_timeout_s or 10.0)
