@@ -116,24 +116,68 @@ class StepPropertiesWidget(QWidget):
         layout_wait.addRow("Duration (s):", self.wait_spin)
         self.stack.addWidget(self.page_wait)
         
-        # 5. Loop/Goto
-        self.page_goto = QWidget()
-        layout_goto = QFormLayout()
-        self.page_goto.setLayout(layout_goto)
-        self.goto_spin = QSpinBox(); self.goto_spin.setRange(1, 9999)
-        layout_goto.addRow("Jump to Step #:", self.goto_spin)
-        self.stack.addWidget(self.page_goto)
+        # 5. Loop (Smart Loop)
+        self.page_loop = QWidget()
+        layout_loop = QFormLayout()
+        self.page_loop.setLayout(layout_loop)
         
-        # 6. Await
-        self.page_await = QWidget()
-        layout_await = QFormLayout()
-        self.page_await.setLayout(layout_await)
-        self.await_timeout = QDoubleSpinBox(); self.await_timeout.setRange(0, 3600); self.await_timeout.setValue(10.0)
-        self.await_interval = QSpinBox(); self.await_interval.setRange(10, 10000); self.await_interval.setValue(500); self.await_interval.setSuffix(" ms")
-        layout_await.addRow(QLabel("Waits for child steps to succeed."))
-        layout_await.addRow("Max Duration (Limit) (s):", self.await_timeout)
-        layout_await.addRow("Retry Delay (Interval):", self.await_interval)
-        self.stack.addWidget(self.page_await)
+        # Loop Mode
+        self.loop_mode_combo = QComboBox()
+        self.loop_mode_combo.addItems(["Run While Condition is Met (While)", "Run Until Condition is Met (Until)"])
+        layout_loop.addRow("Loop Mode:", self.loop_mode_combo)
+        
+        # Max Count
+        self.loop_max_count = QSpinBox()
+        self.loop_max_count.setRange(1, 99999)
+        self.loop_max_count.setValue(100)
+        layout_loop.addRow("Max Iterations (Safety):", self.loop_max_count)
+        
+        # Loop Condition (Nested Group)
+        grp_cond = QGroupBox("Loop Condition")
+        layout_cond = QVBoxLayout()
+        grp_cond.setLayout(layout_cond)
+        
+        # Condition Type Selection
+        self.loop_cond_type = QComboBox()
+        self.loop_cond_type.addItems(["Image", "Color", "Text"])
+        layout_cond.addWidget(QLabel("Condition Type:"))
+        layout_cond.addWidget(self.loop_cond_type)
+        
+        # Condition Config Stack
+        self.loop_cond_stack = PyQt6.QtWidgets.QStackedWidget()
+        layout_cond.addWidget(self.loop_cond_stack)
+        
+        # -- Loop: Image Page --
+        p_l_img = QWidget(); l_l_img = QFormLayout(); p_l_img.setLayout(l_l_img)
+        self.l_img_path = QLineEdit()
+        self.l_img_btn = QPushButton("Capture")
+        row_l_img = QHBoxLayout(); row_l_img.addWidget(self.l_img_path); row_l_img.addWidget(self.l_img_btn)
+        self.l_img_conf = QDoubleSpinBox(); self.l_img_conf.setRange(0.1, 1.0); self.l_img_conf.setValue(0.9); self.l_img_conf.setSingleStep(0.05)
+        l_l_img.addRow("Image:", row_l_img)
+        l_l_img.addRow("Confidence:", self.l_img_conf)
+        self.loop_cond_stack.addWidget(p_l_img)
+        
+        # -- Loop: Color Page --
+        p_l_col = QWidget(); l_l_col = QFormLayout(); p_l_col.setLayout(l_l_col)
+        self.l_col_val = QLineEdit("#FFFFFF")
+        self.l_col_btn = QPushButton("Pick")
+        row_l_col = QHBoxLayout(); row_l_col.addWidget(self.l_col_val); row_l_col.addWidget(self.l_col_btn)
+        self.l_col_tol = QSpinBox(); self.l_col_tol.setRange(0, 100); self.l_col_tol.setValue(10)
+        l_l_col.addRow("Color:", row_l_col)
+        l_l_col.addRow("Tolerance:", self.l_col_tol)
+        self.loop_cond_stack.addWidget(p_l_col)
+
+        # -- Loop: Text Page --
+        p_l_txt = QWidget(); l_l_txt = QFormLayout(); p_l_txt.setLayout(l_l_txt)
+        self.l_txt_val = QLineEdit()
+        l_l_txt.addRow("Text:", self.l_txt_val)
+        self.loop_cond_stack.addWidget(p_l_txt)
+        
+        layout_loop.addRow(grp_cond)
+        self.stack.addWidget(self.page_loop)
+        
+        # Connect Loop Condition Type to Stack
+        self.loop_cond_type.currentIndexChanged.connect(self.loop_cond_stack.setCurrentIndex)
         
         # --- Bottom ---
         self.layout.addStretch()
