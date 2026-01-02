@@ -340,8 +340,13 @@ class WorkflowCanvasWidget(QTreeWidget):
                 
                 # Configure Drag/Drop Flags
                 # Only Allow Drop (Nesting) on Containers
-                if step.type in [StepType.IF, StepType.UNTIL, StepType.AWAIT, StepType.LOOP]:
-                    print(f"[DEBUG] Enabling Drop for Step: {step.name} ({step.type})")
+                # Configure Drag/Drop Flags
+                # Only Allow Drop (Nesting) on Containers
+                # Debug Type
+                print(f"[DEBUG] Checking Step: {step.name}, Type: {step.type} (Raw: {repr(step.type)}), MatchLOOP? {step.type == StepType.LOOP} or {str(step.type) == 'LOOP'}")
+                
+                if step.type in [StepType.IF, StepType.UNTIL, StepType.AWAIT, StepType.LOOP] or str(step.type) == "LOOP":
+                    print(f"[DEBUG] Enabling Drop for Step: {step.name}")
                     item.setFlags(item.flags() | Qt.ItemFlag.ItemIsDropEnabled)
                 else:
                     item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsDropEnabled)
