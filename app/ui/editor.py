@@ -251,7 +251,7 @@ class WorkflowEditor(QMainWindow):
                 # If target is new_step (dropped on self), ignore
                 if target_step == new_step: return
 
-                if target_step.type in [StepType.IF, StepType.UNTIL, StepType.AWAIT]:
+                if target_step.type in [StepType.IF, StepType.UNTIL, StepType.AWAIT, StepType.LOOP]:
                     target_step.children.append(new_step)
                     inserted = True
                 else:
