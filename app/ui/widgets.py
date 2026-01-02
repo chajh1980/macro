@@ -23,7 +23,7 @@ class StepPropertiesWidget(QWidget):
         
         self.name_edit = QLineEdit()
         self.command_combo = QComboBox()
-        self.command_combo.addItems(["Find Image", "Find Color", "Move Mouse", "Click Mouse", "Wait", "Loop/Goto", "Await"])
+        self.command_combo.addItems(["Find Image", "Find Color", "Move Mouse", "Click Mouse", "Wait", "Loop", "Await", "Goto"])
         self.command_combo.setEnabled(False) # Prevent changing type
         
         top_layout.addRow("Step Name:", self.name_edit)
@@ -33,6 +33,21 @@ class StepPropertiesWidget(QWidget):
         # --- Stacked Pages ---
         self.stack = PyQt6.QtWidgets.QStackedWidget()
         self.layout.addWidget(self.stack)
+        
+        # 0. Find Image
+        self.page_image = QWidget()
+        layout_img = QFormLayout()
+        self.page_image.setLayout(layout_img)
+        
+        self.img_path_edit = QLineEdit()
+        self.capture_img_btn = QPushButton("Capture Image")
+# ... (Image Page content preserved implicitly by not changing lines 44-63) ...
+# I need to be careful not to delete content. I will use the EndLine carefully.
+# Actually, I should just update the combo box items first.
+# Then add the Goto page at the end.
+
+# Let's split this into two edits for safety. 
+# Edit 1: Update Combo Items and create Page 7 (Goto).
         
         # 0. Find Image
         self.page_image = QWidget()
@@ -189,6 +204,14 @@ class StepPropertiesWidget(QWidget):
         layout_await.addRow("Max Duration (Limit) (s):", self.await_timeout)
         layout_await.addRow("Retry Delay (Interval):", self.await_interval)
         self.stack.addWidget(self.page_await)
+
+        # 7. Goto
+        self.page_goto = QWidget()
+        layout_goto = QFormLayout()
+        self.page_goto.setLayout(layout_goto)
+        self.goto_spin = QSpinBox(); self.goto_spin.setRange(1, 9999)
+        layout_goto.addRow("Jump to Step #:", self.goto_spin)
+        self.stack.addWidget(self.page_goto)
         
         # --- Bottom ---
         self.layout.addStretch()
@@ -224,7 +247,7 @@ class StepPropertiesWidget(QWidget):
         self.wait_spin.valueChanged.connect(self._sync_data)
         
         # Goto
-        # self.goto_spin.valueChanged.connect(self._sync_data)
+        self.goto_spin.valueChanged.connect(self._sync_data)
         
         # Await
         self.await_timeout.valueChanged.connect(self._sync_data)
@@ -298,11 +321,12 @@ class StepPropertiesWidget(QWidget):
         
         # 1. Goto Action (if not Loop type but Action GOTO)
         # 1. Goto Action (Legacy/Deprecated map to Loop page?)
+        # 1. Goto Action
         elif step.action.type == ActionType.GOTO:
-            self.command_combo.setCurrentIndex(5) 
-            self.stack.setCurrentIndex(5)
-            # self.goto_spin.setValue(step.action.goto_step_index or 1) # Removed: goto_spin no longer exists
-            pass
+            self.command_combo.setCurrentIndex(7) 
+            self.stack.setCurrentIndex(7)
+            self.goto_spin.setValue(step.action.goto_step_index or 1)
+            
 
         # Determine Index for other step types
         idx = 0 # Default to Image page
@@ -311,12 +335,7 @@ class StepPropertiesWidget(QWidget):
         elif step.action.type == ActionType.MOVE and step.condition.type == ConditionType.TIME: idx = 2
         elif step.action.type == ActionType.CLICK and step.condition.type == ConditionType.TIME: idx = 3
         elif step.action.type == ActionType.NONE and step.condition.type == ConditionType.TIME: idx = 4 # Wait
-        elif step.action.type == ActionType.GOTO: idx = 5 # This will now point to the Loop page, which is incorrect for a simple GOTO. This needs re-evaluation if simple GOTO is still a distinct UI page. For now, following the instruction to keep this line.
-        # The original code had:
-        # elif step.type == StepType.AWAIT: idx = 6
-        # elif step.type == StepType.IF: idx = 6 
-        # elif step.type == StepType.UNTIL: idx = 6
-        # These are now handled by the explicit if blocks above.
+        elif step.action.type == ActionType.GOTO: idx = 7
         
         self.command_combo.setCurrentIndex(idx)
         self.stack.setCurrentIndex(idx)
@@ -439,9 +458,14 @@ class StepPropertiesWidget(QWidget):
         # 6. Await
         elif idx == 6:
             self.current_step.type = StepType.AWAIT
-            self.current_step.condition.type = ConditionType.TIME # Placeholder
+            # ...
             self.current_step.condition.retry_timeout_s = self.await_timeout.value()
             self.current_step.condition.retry_interval_ms = self.await_interval.value()
+            
+        # 7. Goto
+        elif idx == 7:
+             self.current_step.action.type = ActionType.GOTO
+             self.current_step.action.goto_step_index = self.goto_spin.value()
             
         self.step_changed.emit(self.current_step)
 
