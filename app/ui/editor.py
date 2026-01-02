@@ -193,10 +193,13 @@ class WorkflowEditor(QMainWindow):
                 step.type = StepType.IF
                 step.name = "If Condition"
                 step.condition.type = ConditionType.IMAGE
-            elif type_code == "until":
-                step.type = StepType.UNTIL
-                step.name = "Until Loop"
-                step.condition.type = ConditionType.IMAGE
+            elif type_code == "until" or type_code == "loop":
+                from app.core.models import LoopMode
+                step.type = StepType.LOOP
+                step.name = "Smart Loop"
+                step.condition.type = ConditionType.IMAGE # Default
+                step.condition.loop_mode = LoopMode.UNTIL_FOUND # Default to Until
+                step.condition.loop_max_count = 100
             elif type_code == "await":
                 step.type = StepType.AWAIT
                 step.name = "Await"
