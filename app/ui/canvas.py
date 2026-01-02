@@ -52,9 +52,9 @@ class StepCardWidget(QWidget):
         
         self.drag_start_pos = None # For drag handling
         
-        # Check if AWAIT, IF, or UNTIL with child -> "Two Slot" Mode
+        # Check if AWAIT, IF, UNTIL, or LOOP with child -> "Two Slot" Mode
         self.child_step = None
-        if step.type in [StepType.AWAIT, StepType.IF, StepType.UNTIL] and step.children:
+        if step.type in [StepType.AWAIT, StepType.IF, StepType.UNTIL, StepType.LOOP] and step.children:
             self.child_step = step.children[0]
             
         if self.child_step:
