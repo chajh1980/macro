@@ -320,17 +320,17 @@ class WorkflowCanvasWidget(QTreeWidget):
                 
                 # Configure Drag/Drop Flags
                 # Only Allow Drop (Nesting) on Containers
-                if step.type in [StepType.IF, StepType.UNTIL, StepType.AWAIT]:
+                if step.type in [StepType.IF, StepType.UNTIL, StepType.AWAIT, StepType.LOOP]:
                     item.setFlags(item.flags() | Qt.ItemFlag.ItemIsDropEnabled)
                 else:
                     item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsDropEnabled)
                 
                 # Recursion for children
                 if step.children:
-                    # SPECIAL CASE: For AWAIT, IF, UNTIL with 1 child, we visualised it inline in the parent widget.
+                    # SPECIAL CASE: For AWAIT, IF, UNTIL, LOOP with 1 child, we visualised it inline in the parent widget.
                     # We hide the first child from the tree view to avoid duplication.
                     
-                    hide_first_child = (step.type in [StepType.AWAIT, StepType.IF, StepType.UNTIL] and len(step.children) >= 1)
+                    hide_first_child = (step.type in [StepType.AWAIT, StepType.IF, StepType.UNTIL, StepType.LOOP] and len(step.children) >= 1)
                     
                     # Pass logic to child_builder
                     build_tree(step.children, item, f"{idx_str}.", hide_first_child=hide_first_child)
