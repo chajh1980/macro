@@ -179,6 +179,17 @@ class StepPropertiesWidget(QWidget):
         # Connect Loop Condition Type to Stack
         self.loop_cond_type.currentIndexChanged.connect(self.loop_cond_stack.setCurrentIndex)
         
+        # 6. Await
+        self.page_await = QWidget()
+        layout_await = QFormLayout()
+        self.page_await.setLayout(layout_await)
+        self.await_timeout = QDoubleSpinBox(); self.await_timeout.setRange(0, 3600); self.await_timeout.setValue(10.0)
+        self.await_interval = QSpinBox(); self.await_interval.setRange(10, 10000); self.await_interval.setValue(500); self.await_interval.setSuffix(" ms")
+        layout_await.addRow(QLabel("Waits for child steps to succeed."))
+        layout_await.addRow("Max Duration (Limit) (s):", self.await_timeout)
+        layout_await.addRow("Retry Delay (Interval):", self.await_interval)
+        self.stack.addWidget(self.page_await)
+        
         # --- Bottom ---
         self.layout.addStretch()
         self.test_btn = QPushButton("Test This Step")
