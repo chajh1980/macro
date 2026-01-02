@@ -393,7 +393,8 @@ class WorkflowCanvasWidget(QTreeWidget):
                 self.setItemWidget(item, 0, widget)
                 
                 # Configure Flags
-                if step.type in [StepType.IF, StepType.UNTIL, StepType.AWAIT]:
+                # Configure Flags
+                if step.type in [StepType.IF, StepType.UNTIL, StepType.AWAIT, StepType.LOOP] or str(step.type) == "LOOP":
                     item.setFlags(item.flags() | Qt.ItemFlag.ItemIsDropEnabled)
                 else:
                     item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsDropEnabled)
