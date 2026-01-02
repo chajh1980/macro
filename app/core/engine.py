@@ -133,26 +133,81 @@ class WorkflowRunner(QObject):
                 self.log_signal.emit(f"[IF] Condition failed. Skipping children.")
                 return True # Inherently successful in execution, just didn't run children.
                 
-        elif step.type == StepType.UNTIL:
-            # Logic: Repeat children WHILE condition is True? Or UNTIL True?
-            # User said: "satisfy condition -> repeat". This is WHILE TRUE.
-            # So: Check Condition -> If True, Run Children, Repeat.
-            self.log_signal.emit(f"[UNTIL] Starting loop (While Condition is True)...")
-            loop_count = 0
+        elif step.type == StepType.LOOP:
+            # Smart Loop Logic
+            # Mode: WHILE_FOUND vs UNTIL_FOUND
+            # Count: loop_max_count
+            
+            mode = step.condition.loop_mode
+            max_count = step.condition.loop_max_count or 100
+            
+            self.log_signal.emit(f"[LOOP] Starting {mode.value} (Max: {max_count})...")
+            
+        elif step.type == StepType.LOOP:
+            # Smart Loop Logic
+            # Condition: First Child Step
+            # Body: Remaining Children
+            
+            mode = step.condition.loop_mode
+            max_count = step.condition.loop_max_count or 100
+            
+            self.log_signal.emit(f"[LOOP] Starting {mode.value} (Max: {max_count})...")
+            
+            if not step.children:
+                self.log_signal.emit(f"[LOOP] Error: No condition step (first child) found.")
+                return False
+                
+            count = 0
             while self.is_running:
-                if self._check_condition(step):
-                    loop_count += 1
-                    self.log_signal.emit(f"[UNTIL] Loop #{loop_count} - Condition met.")
-                    if not self._execute_steps(step.children):
-                        return False # Child failed/stopped
+                # 1. Check Max Count
+                if count >= max_count:
+                    self.log_signal.emit(f"[LOOP] Max count ({max_count}) reached. Stopping.")
+                    break
                     
-                    # Prevent infinite tight loop if children are empty or instant
-                    if not step.children:
+                # 2. Check Condition (Execute First Child)
+                # First child is the "Condition Step". We execute it and see if it returns True.
+                cond_step = step.children[0]
+                is_found = self._execute_step(cond_step)
+                
+                should_run_body = False
+                
+                if mode == LoopMode.WHILE_FOUND:
+                    if is_found:
+                         should_run_body = True
+                         self.log_signal.emit(f"[LOOP] #{count+1}: Condition Met (Found). Running body...")
+                    else:
+                         self.log_signal.emit(f"[LOOP] Condition Not Met (Not Found). Loop Ends.")
+                         break
+                         
+                elif mode == LoopMode.UNTIL_FOUND:
+                    if not is_found:
+                         should_run_body = True
+                         self.log_signal.emit(f"[LOOP] #{count+1}: Condition Not Met (Not Found). Running body (Retry)...")
+                    else:
+                         self.log_signal.emit(f"[LOOP] Condition Met (Found!). Loop Ends.")
+                         break
+                
+                # 3. Execution (Body)
+                if should_run_body:
+                    body_steps = step.children[1:]
+                    if body_steps:
+                        if not self._execute_steps(body_steps):
+                             self.log_signal.emit(f"[LOOP] Body execution failed/stopped.")
+                             return False 
+                    
+                    count += 1
+                    
+                    # Prevent instant infinite loops if body is empty
+                    if not body_steps:
                         self._interruptible_sleep(0.1)
                 else:
-                    self.log_signal.emit(f"[UNTIL] Condition no longer met. Exiting loop.")
                     break
+                    
             return True
+            
+        elif step.type == StepType.UNTIL:
+            # Deprecated Legacy Handling (keeping for safety if user has old steps)
+            return self._execute_until_legacy(step)
             
         elif step.type == StepType.AWAIT:
             # Logic: Retry children UNTIL they succeed (return True).
