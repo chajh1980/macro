@@ -265,8 +265,10 @@ class WorkflowCanvasWidget(QTreeWidget):
             # Check if we are hovering over a valid container
             target_item = self.itemAt(event.position().toPoint())
             if target_item:
-                 # We rely on flags() having ItemIsDropEnabled
-                 pass
+                 step = target_item.data(0, Qt.ItemDataRole.UserRole)
+                 flags = target_item.flags()
+                 is_drop = bool(flags & Qt.ItemFlag.ItemIsDropEnabled)
+                 # print(f"[DEBUG] Hover: {step.name if step else '?'}, DropEnabled={is_drop}")
             
             # Delegate to super for drawing indicators (lines/rects)
             super().dragMoveEvent(event)
