@@ -252,7 +252,8 @@ class WorkflowEditor(QMainWindow):
                 if target_step == new_step: return
 
                 if target_step.type in [StepType.IF, StepType.UNTIL, StepType.AWAIT, StepType.LOOP]:
-                    target_step.children.append(new_step)
+                    # Insert at index 0 to become the NEW Condition
+                    target_step.children.insert(0, new_step)
                     inserted = True
                 else:
                     target_list.insert(target_idx + 1, new_step)
