@@ -305,6 +305,8 @@ class WorkflowCanvasWidget(QTreeWidget):
                 elif indicator == QAbstractItemView.DropIndicatorPosition.AboveItem: indicator_val = 1
                 elif indicator == QAbstractItemView.DropIndicatorPosition.BelowItem: indicator_val = 2
             
+            print(f"[DEBUG] Drop: Target={target_item.data(0, Qt.ItemDataRole.UserRole).name if target_item else 'None'}, Indicator={indicator_val} (Raw: {indicator})")
+            
             self.step_dropped.emit(category, type_code, target_item, indicator_val)
             event.accept()
         else:
@@ -337,6 +339,7 @@ class WorkflowCanvasWidget(QTreeWidget):
                 # Configure Drag/Drop Flags
                 # Only Allow Drop (Nesting) on Containers
                 if step.type in [StepType.IF, StepType.UNTIL, StepType.AWAIT, StepType.LOOP]:
+                    # print(f"[DEBUG] Enabling Drop for Step: {step.name} ({step.type})")
                     item.setFlags(item.flags() | Qt.ItemFlag.ItemIsDropEnabled)
                 else:
                     item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsDropEnabled)
