@@ -22,6 +22,10 @@ class ActionType(str, Enum):
     GOTO = "GOTO"
     NONE = "NONE"
     
+class ImageMatchMode(str, Enum):
+    SINGLE = "SINGLE"
+    SEQUENTIAL = "SEQUENTIAL"
+
 class LoopMode(str, Enum):
     WHILE_FOUND = "WHILE_FOUND" # Run while condition is met
     UNTIL_FOUND = "UNTIL_FOUND" # Run until condition is met
