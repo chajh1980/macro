@@ -378,6 +378,7 @@ class WorkflowCanvasWidget(QTreeWidget):
                 # Check if this item is the one we should hide?
                 if i == 0 and hide_first_child:
                     # HIDDEN ITEM
+                    print(f"[DEBUG] Hiding First Child Item: {step.name} ({idx_str})")
                     item.setHidden(True)
                     # We still need the widget? No, visual is improved in parent.
                     # But we might need widget for selection callbacks?
@@ -400,7 +401,8 @@ class WorkflowCanvasWidget(QTreeWidget):
                     item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsDropEnabled)
                 
                 # Detect inline mode for THIS step
-                is_container_inline = (step.type in [StepType.AWAIT, StepType.IF, StepType.UNTIL] and len(step.children) >= 1)
+                # Detect inline mode for THIS step
+                is_container_inline = (step.type in [StepType.AWAIT, StepType.IF, StepType.UNTIL, StepType.LOOP] or str(step.type) == "LOOP") and len(step.children) >= 1
                 
                 if step.children:
                     build_tree(step.children, item, f"{idx_str}.", hide_first_child=is_container_inline)
