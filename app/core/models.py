@@ -5,9 +5,10 @@ from pydantic import BaseModel, Field
 class StepType(str, Enum):
     GENERAL = "GENERAL"
     CONDITION = "CONDITION"
-    LOOP = "LOOP"
+    LOOP = "LOOP" # Replaces UNTIL conceptually
     IF = "IF"
-    UNTIL = "UNTIL"
+    UNTIL = "UNTIL" # Legacy, keep for now or deprecate
+    AWAIT = "AWAIT"
 
 class ConditionType(str, Enum):
     IMAGE = "IMAGE"
@@ -20,10 +21,10 @@ class ActionType(str, Enum):
     MOVE = "MOVE"
     GOTO = "GOTO"
     NONE = "NONE"
-
-class ImageMatchMode(str, Enum):
-    SINGLE = "SINGLE"
-    SEQUENTIAL = "SEQUENTIAL"
+    
+class LoopMode(str, Enum):
+    WHILE_FOUND = "WHILE_FOUND" # Run while condition is met
+    UNTIL_FOUND = "UNTIL_FOUND" # Run until condition is met
 
 class Condition(BaseModel):
     type: ConditionType
@@ -50,6 +51,10 @@ class Condition(BaseModel):
     # Await / Retry Policy (for If/Until/Wait)
     retry_timeout_s: float = 5.0 # Total max time to retry
     retry_interval_ms: int = 500   # Interval between checks
+    
+    # Smart Loop Configuration
+    loop_mode: LoopMode = LoopMode.UNTIL_FOUND
+    loop_max_count: int = 100 # Safety limit
 
 class Action(BaseModel):
     type: ActionType
