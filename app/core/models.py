@@ -9,6 +9,7 @@ class StepType(str, Enum):
     IF = "IF"
     UNTIL = "UNTIL" # Legacy, keep for now or deprecate
     AWAIT = "AWAIT"
+    INPUT = "INPUT"
 
 class ConditionType(str, Enum):
     IMAGE = "IMAGE"
