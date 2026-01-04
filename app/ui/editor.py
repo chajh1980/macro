@@ -204,6 +204,10 @@ class WorkflowEditor(QMainWindow):
                 step.type = StepType.AWAIT
                 step.name = "Await"
                 step.condition.type = ConditionType.TIME
+            elif type_code == "input":
+                step.type = StepType.INPUT
+                step.name = "User Input"
+                step.action.type = ActionType.NONE
 
     def _on_step_dropped(self, category, type_code, target_item=None, indicator_pos=3):
         new_step = None
