@@ -239,6 +239,11 @@ class StepPropertiesWidget(QWidget):
         # Await
         self.await_timeout.valueChanged.connect(self._sync_data)
         self.await_interval.valueChanged.connect(self._sync_data)
+
+        # Input
+        self.input_prompt.textChanged.connect(self._sync_data)
+        self.input_var_name.textChanged.connect(self._sync_data)
+        self.loop_var_name.textChanged.connect(self._sync_data)
         
     def _on_combo_changed(self, idx):
         self.stack.setCurrentIndex(idx)
@@ -369,6 +374,7 @@ class StepPropertiesWidget(QWidget):
         if not self.current_step or self.signalsBlocked(): return
         
         self.current_step.name = self.name_edit.text()
+        idx = self.command_combo.currentIndex()
         
         # 0. Image
         if idx == 0:
