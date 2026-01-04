@@ -445,6 +445,13 @@ class StepPropertiesWidget(QWidget):
         elif idx == 7:
              self.current_step.action.type = ActionType.GOTO
              self.current_step.action.goto_step_index = self.goto_spin.value()
+
+        # 8. Input
+        elif idx == 8:
+             self.current_step.type = StepType.INPUT
+             self.current_step.action.type = ActionType.NONE
+             self.current_step.action.input_prompt = self.input_prompt.text()
+             self.current_step.action.input_variable_name = self.input_var_name.text()
             
         self.step_changed.emit(self.current_step)
 
