@@ -375,6 +375,7 @@ class StepPropertiesWidget(QWidget):
         
         self.current_step.name = self.name_edit.text()
         idx = self.command_combo.currentIndex()
+        idx = self.command_combo.currentIndex()
         
         # 0. Image
         if idx == 0:
