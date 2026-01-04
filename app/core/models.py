@@ -8,6 +8,7 @@ class StepType(str, Enum):
     LOOP = "LOOP" # Replaces UNTIL conceptually
     IF = "IF"
     UNTIL = "UNTIL" # Legacy, keep for now or deprecate
+    AWAIT = "AWAIT"
     INPUT = "INPUT"
 
 class ConditionType(str, Enum):
