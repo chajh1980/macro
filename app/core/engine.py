@@ -14,6 +14,7 @@ class WorkflowRunner(QObject):
     progress_signal = pyqtSignal(int, str) # Step Index, Step Name
     log_signal = pyqtSignal(str)
     finished_signal = pyqtSignal()
+    request_input_signal = pyqtSignal(str) # Prompt. Returns to self.set_input_value
     
     def __init__(self, workflow: Workflow, workflow_dir: str = ""):
         super().__init__()
@@ -22,6 +23,18 @@ class WorkflowRunner(QObject):
         self.is_running = False
         self.current_step_index = 0
         self.visited_matches = [] # For sequential image matching
+        
+        # Variable Context
+        self.variables = {}
+        # Input Synchronization
+        import threading
+        self.input_event = threading.Event()
+        self.input_result = None
+
+    def set_input_value(self, value):
+        """Called by Main Thread when user provides input"""
+        self.input_result = value
+        self.input_event.set()
 
     def stop(self):
         self.is_running = False
@@ -121,6 +134,35 @@ class WorkflowRunner(QObject):
         """
         Executes a single step. Returns True if successful, False if condition failed or action failed.
         """
+        if step.type == StepType.INPUT:
+            # 1. Request Input
+            prompt = step.action.input_prompt or "값을 입력하세요"
+            self.log_signal.emit(f"[INPUT] requesting input: {prompt}")
+            
+            # Clear previous event/result
+            self.input_event.clear()
+            self.input_result = None
+            
+            # Emit signal to UI
+            self.request_input_signal.emit(prompt)
+            
+            # Wait for response (blocking this thread, but allow stop)
+            while not self.input_event.is_set():
+                if not self.is_running: return False
+                time.sleep(0.1)
+                
+            # 2. Store Variable
+            var_name = step.action.input_variable_name or "count"
+            try:
+                # Try converting to int if possible, else string
+                val = int(self.input_result)
+            except:
+                val = self.input_result
+                
+            self.variables[var_name] = val
+            self.log_signal.emit(f"[INPUT] Stored '{val}' in variable '{var_name}'")
+            return True
+
         # 1. Handle Control Flow Steps
         if step.type == StepType.IF:
             # Check condition (ConditionType.IMAGE/COLOR usually)
@@ -150,6 +192,19 @@ class WorkflowRunner(QObject):
             
             mode = step.condition.loop_mode
             max_count = step.condition.loop_max_count or 100
+            
+            # Check for Variable Override
+            if step.condition.loop_count_variable:
+                var_name = step.condition.loop_count_variable
+                if var_name in self.variables:
+                    val = self.variables[var_name]
+                    if isinstance(val, int):
+                        max_count = val
+                        self.log_signal.emit(f"[LOOP] Using variable '{var_name}' = {max_count}")
+                    else:
+                        self.log_signal.emit(f"[LOOP] Variable '{var_name}' is not an integer ({val}). Using default {max_count}.")
+                else:
+                    self.log_signal.emit(f"[LOOP] Variable '{var_name}' not found. Using default {max_count}.")
             
             self.log_signal.emit(f"[LOOP] Starting {mode.value} (Max: {max_count})...")
             

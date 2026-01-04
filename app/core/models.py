@@ -59,6 +59,7 @@ class Condition(BaseModel):
     # Smart Loop Configuration
     loop_mode: LoopMode = LoopMode.UNTIL_FOUND
     loop_max_count: int = 100 # Safety limit
+    loop_count_variable: Optional[str] = None # New: Use variable for loop count
 
 class Action(BaseModel):
     type: ActionType
@@ -68,6 +69,8 @@ class Action(BaseModel):
     
     # Goto specific
     goto_step_index: Optional[int] = None # 1-based index as per PRD, but we might convert to 0-based internally
+    input_variable_name: Optional[str] = "count" # New: Variable name to store input
+    input_prompt: str = "값을 입력하세요" # New: Text to show user
 
 class Step(BaseModel):
     id: str = Field(..., description="Unique identifier for the step")

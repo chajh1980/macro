@@ -81,6 +81,18 @@ def main():
         windows["runner"] = runner_window
         runner_window.show()
         
+        # Connect Input Signal
+        def on_input_requested(prompt):
+            from PyQt6.QtWidgets import QInputDialog
+            items = ["1", "2", "3", "4", "5"]
+            val, ok = QInputDialog.getItem(runner_window, "입력 요청", prompt, items, 0, False)
+            if ok and val:
+                runner.set_input_value(val)
+            else:
+                runner.set_input_value("1") # Default fallback
+                
+        runner.request_input_signal.connect(on_input_requested)
+        
         t = threading.Thread(target=runner.run)
         t.start()
         

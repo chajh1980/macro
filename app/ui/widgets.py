@@ -23,7 +23,7 @@ class StepPropertiesWidget(QWidget):
         
         self.name_edit = QLineEdit()
         self.command_combo = QComboBox()
-        self.command_combo.addItems(["Find Image", "Find Color", "Move Mouse", "Click Mouse", "Wait", "Loop", "Await", "Goto"])
+        self.command_combo.addItems(["Find Image", "Find Color", "Move Mouse", "Click Mouse", "Wait", "Loop", "Await", "Goto", "Input"])
         self.command_combo.setEnabled(False) # Prevent changing type
         
         top_layout.addRow("Step Name:", self.name_edit)
@@ -145,8 +145,19 @@ class StepPropertiesWidget(QWidget):
         self.loop_max_count = QSpinBox()
         self.loop_max_count.setRange(1, 99999)
         self.loop_max_count.setValue(100)
-        self.loop_max_count.setValue(100)
-        layout_loop.addRow("Max Iterations (Safety):", self.loop_max_count)
+        
+        # Variable Override
+        self.loop_use_var_cb = QCheckBox("Use Variable?")
+        self.loop_var_name = QLineEdit(); self.loop_var_name.setPlaceholderText("e.g. count")
+        self.loop_var_name.setEnabled(False)
+        self.loop_use_var_cb.toggled.connect(lambda c: self.loop_var_name.setEnabled(c))
+        
+        row_loop_count = QHBoxLayout()
+        row_loop_count.addWidget(self.loop_max_count)
+        row_loop_count.addWidget(self.loop_use_var_cb)
+        row_loop_count.addWidget(self.loop_var_name)
+        
+        layout_loop.addRow("Max Iterations:", row_loop_count)
         
         layout_loop.addRow(QLabel("Note: The FIRST child step dropped into this Loop will act as the Condition."))
         
@@ -170,6 +181,24 @@ class StepPropertiesWidget(QWidget):
         self.goto_spin = QSpinBox(); self.goto_spin.setRange(1, 9999)
         layout_goto.addRow("Jump to Step #:", self.goto_spin)
         self.stack.addWidget(self.page_goto)
+        
+        # 8. Input
+        self.page_input = QWidget()
+        layout_input = QFormLayout()
+        self.page_input.setLayout(layout_input)
+        self.input_prompt = QLineEdit("값을 입력하세요")
+        self.input_var_name = QLineEdit("count"); self.input_var_name.setPlaceholderText("variable_name")
+        layout_input.addRow("User Prompt:", self.input_prompt)
+        layout_input.addRow("Save to Variable:", self.input_var_name)
+        self.stack.addWidget(self.page_input)
+
+        # Update Loop Page with Variable option
+        # We need to recreate or modify the layout logic for Loop since we can't easily insert into existing layout via 'replace' if we don't see it all.
+        # But we saw valid Loop logic above. I will modify the previous block (Loop Page) separately or rely on 'load_step' handling visibility.
+        # Actually proper way is to modify the Loop Page definition block above.
+        
+        # Let's modify the Loop Page block in a separate call or here if I can target it.
+        # I will target lines 145-150 for Loop modification later.
         
         # --- Bottom ---
         self.layout.addStretch()
@@ -261,31 +290,46 @@ class StepPropertiesWidget(QWidget):
             self.loop_mode_combo.setCurrentIndex(0 if step.condition.loop_mode == LoopMode.WHILE_FOUND else 1)
             self.loop_max_count.setValue(step.condition.loop_max_count or 100)
             
+            # Variable Sync
+            self.loop_var_name.setText(step.condition.loop_count_variable or "")
+            self.loop_use_var_cb.setChecked(bool(step.condition.loop_count_variable))
+            self.loop_var_name.setEnabled(bool(step.condition.loop_count_variable))
+            
             self.blockSignals(False)
             return
         
-        # 1. Goto Action (if not Loop type but Action GOTO)
-        # 1. Goto Action (Legacy/Deprecated map to Loop page?)
-        # 1. Goto Action
-        elif step.action.type == ActionType.GOTO:
-            self.command_combo.setCurrentIndex(7) 
-            self.stack.setCurrentIndex(7)
-            self.goto_spin.setValue(step.action.goto_step_index or 1)
-            
+        # 6. Await
+        elif step.type == StepType.AWAIT:
+            self.command_combo.setCurrentIndex(6)
+            self.stack.setCurrentIndex(6)
+            self.await_timeout.setValue(step.condition.retry_timeout_s or 10.0)
+            self.await_interval.setValue(step.condition.retry_interval_ms or 500)
+
+        # 8. Input
+        elif step.type == StepType.INPUT:
+            self.command_combo.setCurrentIndex(8)
+            self.stack.setCurrentIndex(8)
+            self.input_prompt.setText(step.action.input_prompt or "값을 입력하세요")
+            self.input_var_name.setText(step.action.input_variable_name or "count")
 
         # Determine Index for other step types
-        idx = 0 # Default to Image page
-        if step.condition.type == ConditionType.IMAGE: idx = 0
-        elif step.condition.type == ConditionType.COLOR: idx = 1
-        elif step.action.type == ActionType.MOVE and step.condition.type == ConditionType.TIME: idx = 2
-        elif step.action.type == ActionType.CLICK and step.condition.type == ConditionType.TIME: idx = 3
-        elif step.action.type == ActionType.NONE and step.condition.type == ConditionType.TIME: idx = 4 # Wait
-        elif step.action.type == ActionType.GOTO: idx = 7
+        else:
+            idx = 0 # Default to Image page
+            if step.condition.type == ConditionType.IMAGE: idx = 0
+            elif step.condition.type == ConditionType.COLOR: idx = 1
+            elif step.action.type == ActionType.MOVE and step.condition.type == ConditionType.TIME: idx = 2
+            elif step.action.type == ActionType.CLICK and step.condition.type == ConditionType.TIME: idx = 3
+            elif step.action.type == ActionType.NONE and step.condition.type == ConditionType.TIME: idx = 4 # Wait
+            elif step.action.type == ActionType.GOTO: idx = 7
+            
+            self.command_combo.setCurrentIndex(idx)
+            self.stack.setCurrentIndex(idx)
         
-        self.command_combo.setCurrentIndex(idx)
-        self.stack.setCurrentIndex(idx)
+        # Populate Common Fields
+        # ... (Image, Color, etc populated in previous logic, or below if shared)
+        # Note: Previous implementation had huge if/else block. We must ensure we don't lose that.
+        # But specifically for Loop, we need to populate variables.
         
-        # Populate
         self.img_path_edit.setText(step.condition.target_image_path or "")
         self.img_confidence.setValue(step.condition.confidence or 0.9)
         if step.condition.watch_area and step.condition.type == ConditionType.IMAGE:
@@ -324,7 +368,6 @@ class StepPropertiesWidget(QWidget):
     def _sync_data(self):
         if not self.current_step or self.signalsBlocked(): return
         
-        idx = self.command_combo.currentIndex()
         self.current_step.name = self.name_edit.text()
         
         # 0. Image
