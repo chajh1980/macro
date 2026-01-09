@@ -23,6 +23,8 @@ class WorkflowRunner(QObject):
         self.is_running = False
         self.current_step_index = 0
         self.visited_matches = [] # For sequential image matching
+        self.max_visited_matches = 1000  # Limit memory usage  # Limit memory usage
+        self.max_visited_matches = 1000 # Limit memory usage
         
         # Variable Context
         self.variables = {}
@@ -388,7 +390,7 @@ class WorkflowRunner(QObject):
                  self.log_signal.emit(f"Color NOT found.")
              
              return False
-                
+
         elif condition.type == ConditionType.TEXT:
             try:
                 from app.core.ocr import find_text_on_screen
@@ -399,7 +401,14 @@ class WorkflowRunner(QObject):
                     self.last_match_region = found_region
                     self.log_signal.emit(f"Text found: {condition.target_text}")
                     return True
-            except: pass
+            except ImportError as e:
+                self.log_signal.emit(f"OCR not available: {e}")
+                logger.warning("OCR functionality removed - text recognition disabled")
+                return False
+            except Exception as e:
+                self.log_signal.emit(f"Text recognition error: {e}")
+                logger.error(f"Error in text recognition: {e}")
+                return False
             return False
                 
         return False
@@ -409,22 +418,17 @@ class WorkflowRunner(QObject):
         
         if action.type == ActionType.NONE:
             return
-            
+
         elif action.type == ActionType.GOTO:
-            # Not supported in recursive structure comfortably yet.
-            # Could raise exception or handle?
-            # User said "Goto" is "Etc".
-            # Can we support Goto?
-            # Goto index is typically linear index.
-            # In tree structure, "Goto Step 5" is ambiguous.
-            # For now, log warning that Goto is limited or deprecated in structured flow.
-            # OR: We just modify current_step_index? But we are not using it for control anymore.
-            self.log_signal.emit("Warning: GOTO action is not fully supported in structured mode.")
-            pass 
+            if action.goto_step_index is not None:
+                # PRD uses 1-based, internal is 0-based
+                self.current_step_index = action.goto_step_index - 1
+                self.log_signal.emit(f"GOTO: Jumping to step {action.goto_step_index}")
+                return True
 
         elif action.type == ActionType.MOVE:
-             move_x = None
-             move_y = None
+            move_x = None
+            move_y = None
              
              if step.condition.type in (ConditionType.IMAGE, ConditionType.COLOR, ConditionType.TEXT) and self.last_match_region:
                  # Relative Move
