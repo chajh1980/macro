@@ -377,19 +377,19 @@ class WorkflowRunner(QObject):
                  region=scan_region
              )
              
-             if matches:
-                 idx = condition.match_index
-                 if idx < len(matches):
-                     self.last_match_region = matches[idx]
-                     self.log_signal.emit(f"Color found at {matches[idx]} (Match #{idx+1}/{len(matches)})")
-                     return True
-                 else:
-                     self.log_signal.emit(f"Color matched {len(matches)} times, but index {idx} out of range.")
-                     return False
-             else:
-                 self.log_signal.emit(f"Color NOT found.")
-             
-             return False
+            if matches:
+                idx = condition.match_index
+                if idx < len(matches):
+                    self.last_match_region = matches[idx]
+                    self.log_signal.emit(f"Color found at {matches[idx]} (Match #{idx+1}/{len(matches)})")
+                    return True
+                else:
+                    self.log_signal.emit(f"Color matched {len(matches)} times, but index {idx} out of range.")
+                    return False
+            else:
+                self.log_signal.emit(f"Color NOT found.")
+            
+            return False
 
         elif condition.type == ConditionType.TEXT:
             try:
@@ -429,21 +429,6 @@ class WorkflowRunner(QObject):
         elif action.type == ActionType.MOVE:
             move_x = None
             move_y = None
-             
-             if step.condition.type in (ConditionType.IMAGE, ConditionType.COLOR, ConditionType.TEXT) and self.last_match_region:
-                 # Relative Move
-                 rx, ry, rw, rh = self.last_match_region
-                 l_rx, l_ry, l_rw, l_rh = physical_to_logical((rx, ry, rw, rh))
-                 center_x = l_rx + l_rw // 2
-                 center_y = l_ry + l_rh // 2
-                 
-                 off_x = action.target_x or 0
-                 off_y = action.target_y or 0
-                 
-                 move_x = center_x + off_x
-                 move_y = center_y + off_y
-             else:
-                 # Absolute Move
                  move_x = action.target_x
                  move_y = action.target_y
              
