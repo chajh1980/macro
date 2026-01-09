@@ -3,23 +3,25 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QTimer
 from app.core.engine import WorkflowRunner
+from app.utils.screen_utils import set_window_size_percentage
 
 class RunnerWindow(QWidget):
     def __init__(self, runner: WorkflowRunner):
         super().__init__()
         self.runner = runner
         self.setWindowTitle("Workflow Runner")
-        self.resize(400, 300)
-        
+        set_window_size_percentage(self, width_pct=0.3, height_pct=0.3)
+
         # Focus Management: Don't steal focus on show
         # Qt.Tool prevents minimization on macOS, so we remove it.
         # WA_ShowWithoutActivating helps, but minimization is the primary method now.
         # self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-        
+
         # Overlay
         self.overlay = None
         self.listener = None
+        self.hotkey_available = False
         
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
@@ -40,10 +42,21 @@ class RunnerWindow(QWidget):
         self.layout.addWidget(self.log_area)
         
         # Stop Button
-        self.stop_btn = QPushButton("STOP (Option+C)")
+        self.stop_btn = QPushButton("STOP (Cmd+. or Option+C)")
         self.stop_btn.setStyleSheet("background-color: red; color: white; font-weight: bold; padding: 10px;")
         self.stop_btn.clicked.connect(self._stop_workflow)
         self.layout.addWidget(self.stop_btn)
+
+        # Add Qt-based keyboard shortcuts (works when window is focused)
+        from PyQt6.QtGui import QShortcut, QKeySequence
+        self.cmd_dot_shortcut = QShortcut(QKeySequence.StandardKey.Cancel, self)
+        self.cmd_dot_shortcut.activated.connect(self._stop_workflow)
+
+        self.opt_c_shortcut = QShortcut(QKeySequence("Alt+C"), self)
+        self.opt_c_shortcut.activated.connect(self._stop_workflow)
+
+        self.esc_shortcut = QShortcut(QKeySequence.StandardKey.Cancel, self)
+        self.esc_shortcut.activated.connect(self._stop_workflow)
         
         # Connect Signals
         self.runner.progress_signal.connect(self._on_progress)
@@ -108,10 +121,10 @@ class RunnerWindow(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         print("DEBUG: RunnerWindow showEvent triggered")
-        
-        # Hotkey Listener disabled due to 'trace trap' crash on macOS
-        # self._start_hotkey_listener()
-        
+
+        # Start global hotkey listener (with error handling for macOS trace trap)
+        self._start_hotkey_listener()
+
         # Show Overlay FIRST
         try:
             from app.ui.overlay import Overlay
@@ -119,7 +132,7 @@ class RunnerWindow(QWidget):
                 print("DEBUG: Creating Running Overlay")
                 self.overlay = Overlay(mode="running")
                 self.overlay.show()
-                # Force overlay to paint? 
+                # Force overlay to paint?
                 QApplication.processEvents()
         except Exception as e:
             print(f"DEBUG: Error creating overlay: {e}")
@@ -138,14 +151,17 @@ class RunnerWindow(QWidget):
         try:
              from pynput import keyboard
              self.listener = keyboard.GlobalHotKeys({
-                 '<alt>+c': self._on_hotkey_stop
+                 '<cmd>+c': self._on_hotkey_stop,
+                 '<cmd>+<shift>+c': self._on_hotkey_stop,
+                 'ctrl+c': self._on_hotkey_stop
              })
              self.listener.start()
-             self.log_area.append("Global Hotkey Option+C enabled.")
+             self.hotkey_available = True
+             self.log_area.append("Global Hotkey enabled: Cmd+C / Ctrl+C / Stop Button")
         except ImportError:
-             self.log_area.append("pynput not found. Hotkeys disabled.")
+             self.log_area.append("pynput not found. Global hotkeys disabled. Use window shortcuts (Cmd+., Esc, or Stop Button).")
         except Exception as e:
-             self.log_area.append(f"Error starting hotkeys: {e}")
+             self.log_area.append(f"Global hotkey error: {e}. Use window shortcuts (Cmd+., Esc, or Stop Button).")
         
     def _stop_hotkey_listener(self):
         if hasattr(self, 'listener') and self.listener:
