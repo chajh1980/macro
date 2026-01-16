@@ -3,7 +3,7 @@ import logging
 import pyautogui
 from typing import Optional
 from PyQt6.QtCore import QObject, pyqtSignal
-from app.core.models import Workflow, Step, ConditionType, ActionType, ImageMatchMode, StepType
+from app.core.models import Workflow, Step, ConditionType, ActionType, ImageMatchMode, StepType, LoopMode
 from app.core.image_proc import find_image_on_screen, sort_matches, deduplicate_matches
 # from app.core.ocr import find_text_on_screen # Lazy loaded
 from app.utils.screen_utils import physical_to_logical
@@ -177,16 +177,6 @@ class WorkflowRunner(QObject):
                 self.log_signal.emit(f"[IF] Condition failed. Skipping children.")
                 return True # Inherently successful in execution, just didn't run children.
                 
-        elif step.type == StepType.LOOP:
-            # Smart Loop Logic
-            # Mode: WHILE_FOUND vs UNTIL_FOUND
-            # Count: loop_max_count
-            
-            mode = step.condition.loop_mode
-            max_count = step.condition.loop_max_count or 100
-            
-            self.log_signal.emit(f"[LOOP] Starting {mode.value} (Max: {max_count})...")
-            
         elif step.type == StepType.LOOP:
             # Smart Loop Logic
             # Condition: First Child Step
@@ -366,17 +356,17 @@ class WorkflowRunner(QObject):
                 return False
                 
         elif condition.type == ConditionType.COLOR:
-             # Single check only
-             from app.core.image_proc import find_color_on_screen
-             scan_region = tuple(condition.watch_area) if condition.watch_area else None
-             
-             self.log_signal.emit(f"Scanning for Color: {condition.target_color} (Tol: {condition.color_tolerance})")
-             matches = find_color_on_screen(
-                 target_hex=condition.target_color,
-                 tolerance=condition.color_tolerance,
-                 region=scan_region
-             )
-             
+            # Single check only
+            from app.core.image_proc import find_color_on_screen
+            scan_region = tuple(condition.watch_area) if condition.watch_area else None
+            
+            self.log_signal.emit(f"Scanning for Color: {condition.target_color} (Tol: {condition.color_tolerance})")
+            matches = find_color_on_screen(
+                target_hex=condition.target_color,
+                tolerance=condition.color_tolerance,
+                region=scan_region
+            )
+            
             if matches:
                 idx = condition.match_index
                 if idx < len(matches):
@@ -429,23 +419,34 @@ class WorkflowRunner(QObject):
         elif action.type == ActionType.MOVE:
             move_x = None
             move_y = None
-                 move_x = action.target_x
-                 move_y = action.target_y
-             
-             if move_x is not None and move_y is not None:
-                 pyautogui.moveTo(move_x, move_y)
-             else:
-                 logger.warning("Move action requested but no target set.")
-             
+            
+            if step.condition.type in (ConditionType.IMAGE, ConditionType.COLOR, ConditionType.TEXT) and self.last_match_region:
+                # Relative Move
+                rx, ry, rw, rh = self.last_match_region
+                l_rx, l_ry, l_rw, l_rh = physical_to_logical((rx, ry, rw, rh))
+                center_x = l_rx + l_rw // 2
+                center_y = l_ry + l_rh // 2
+                
+                off_x = action.target_x or 0
+                off_y = action.target_y or 0
+                
+                move_x = center_x + off_x
+                move_y = center_y + off_y
+            else:
+                # Absolute Move
+                move_x = action.target_x
+                move_y = action.target_y
+            
+            if move_x is not None and move_y is not None:
+                pyautogui.moveTo(move_x, move_y)
+            else:
+                logger.warning("Move action requested but no target set.")
+            
         elif action.type == ActionType.CLICK:
              if action.target_x is not None and action.target_y is not None and (action.target_x != 0 or action.target_y != 0):
                  pyautogui.moveTo(action.target_x, action.target_y)
              pyautogui.click()
              
-    def _handle_sequential_click(self, step: Step):
-        # ... logic as before, but adapted if needed ...
-        pass
-
     def _handle_sequential_click(self, step: Step):
         image_path = step.condition.target_image_path
         if self.workflow_dir and image_path:
