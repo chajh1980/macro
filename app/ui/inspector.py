@@ -1,8 +1,11 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QStackedWidget, QLabel, QLineEdit, QFormLayout
+from PyQt6.QtCore import pyqtSignal
 from app.ui.widgets import StepPropertiesWidget
 from app.core.models import Step, Workflow
 
 class WorkflowPropertiesWidget(QWidget):
+    workflow_changed = pyqtSignal()
+
     def __init__(self):
         super().__init__()
         layout = QFormLayout()
@@ -12,9 +15,18 @@ class WorkflowPropertiesWidget(QWidget):
         layout.addRow("Description:", self.desc_edit)
         self.setLayout(layout)
         
+        self.workflow = None
+        self.name_edit.textChanged.connect(self._on_name_changed)
+        
     def load_workflow(self, workflow: Workflow):
+        self.workflow = workflow
         self.name_edit.setText(workflow.name)
         # self.desc_edit.setText(workflow.description) # Assuming description exists
+        
+    def _on_name_changed(self, text):
+        if self.workflow:
+            self.workflow.name = text
+            self.workflow_changed.emit()
 
 class PropertyInspectorWidget(QWidget):
     def __init__(self):

@@ -243,6 +243,11 @@ class StepPropertiesWidget(QWidget):
         # Input
         self.input_prompt.textChanged.connect(self._sync_data)
         self.input_var_name.textChanged.connect(self._sync_data)
+        
+        # Loop
+        self.loop_mode_combo.currentIndexChanged.connect(self._sync_data)
+        self.loop_max_count.valueChanged.connect(self._sync_data)
+        self.loop_use_var_cb.toggled.connect(self._sync_data)
         self.loop_var_name.textChanged.connect(self._sync_data)
         
     def _on_combo_changed(self, idx):
