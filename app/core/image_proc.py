@@ -1,5 +1,6 @@
 from typing import List, Tuple, Optional
 import logging
+import os
 
 logger = logging.getLogger("app.core.image_proc")
 
@@ -12,67 +13,69 @@ def find_image_on_screen(
     import pyautogui
     import cv2
     import numpy as np
+    from app.utils.common import is_debug_mode
     """
-    Finds all occurrences of the target image on the screen.
+    Finds all occurrences of target image on the screen.
     Returns a list of (left, top, width, height) tuples.
     """
     matches = []
-    
-    # DEBUG: Log start
-    logger.debug(f"DEBUG_IMAGE: Searching for {target_image_path} with confidence={confidence}, region={region}")
-    
-    # DEBUG: Save Debug Screenshot of what we are searching on
-    try:
-        from app.utils.common import get_app_dir
-        import os
-        
-        # 0. Capture what PyAutoGUI sees (for debugging)
-        # Use High-Res Capture (Full Screen + Crop) to match the new search logic
-        full_debug_ss = pyautogui.screenshot()
-        debug_ss_np = np.array(full_debug_ss)
-        
-        # Handle RGBA
-        if debug_ss_np.shape[2] == 4:
-            debug_ss_np = debug_ss_np[:, :, :3]
-        debug_ss_np = cv2.cvtColor(debug_ss_np, cv2.COLOR_RGB2BGR)
-        
-        debug_img = debug_ss_np
-        
-        if region:
-            from app.utils.screen_utils import get_screen_scale
-            scale = get_screen_scale()
-            
-            rx, ry, rw, rh = region
-            px = int(rx * scale)
-            py = int(ry * scale)
-            pw = int(rw * scale)
-            ph = int(rh * scale)
-            
-            h_h, h_w = debug_ss_np.shape[:2]
-            px = max(0, min(px, h_w))
-            py = max(0, min(py, h_h))
-            pw = max(0, min(pw, h_w - px))
-            ph = max(0, min(ph, h_h - py))
-            
-            if pw > 0 and ph > 0:
-                debug_img = debug_ss_np[py:py+ph, px:px+pw]
-            
-        debug_path = os.path.join(get_app_dir(), "debug_image_search_capture.png")
-        cv2.imwrite(debug_path, debug_img)
-        logger.debug(f"DEBUG_IMAGE: Saved capture to {debug_path} (Shape={debug_img.shape})")
-        
-        # Check Template
-        if os.path.exists(target_image_path):
-             tmpl = cv2.imread(target_image_path)
-             if tmpl is not None:
-                 logger.debug(f"DEBUG_IMAGE: Template loaded. Shape={tmpl.shape}")
-             else:
-                 logger.error(f"DEBUG_IMAGE: Failed to load template with cv2: {target_image_path}")
-        else:
-             logger.error(f"DEBUG_IMAGE: Template file does not exist: {target_image_path}")
+    debug_enabled = is_debug_mode()
 
-    except Exception as e:
-        logger.error(f"DEBUG_IMAGE: Error saving debug info: {e}")
+    if debug_enabled:
+        logger.debug(f"DEBUG_IMAGE: Searching for {target_image_path} with confidence={confidence}, region={region}")
+
+    if debug_enabled:
+        # DEBUG: Save Debug Screenshot of what we are searching on
+        try:
+            from app.utils.common import get_app_dir
+
+            # 0. Capture what PyAutoGUI sees (for debugging)
+            # Use High-Res Capture (Full Screen + Crop) to match the new search logic
+            full_debug_ss = pyautogui.screenshot()
+            debug_ss_np = np.array(full_debug_ss)
+
+            # Handle RGBA
+            if debug_ss_np.shape[2] == 4:
+                debug_ss_np = debug_ss_np[:, :, :3]
+            debug_ss_np = cv2.cvtColor(debug_ss_np, cv2.COLOR_RGB2BGR)
+
+            debug_img = debug_ss_np
+
+            if region:
+                from app.utils.screen_utils import get_screen_scale
+                scale = get_screen_scale()
+
+                rx, ry, rw, rh = region
+                px = int(rx * scale)
+                py = int(ry * scale)
+                pw = int(rw * scale)
+                ph = int(rh * scale)
+
+                h_h, h_w = debug_ss_np.shape[:2]
+                px = max(0, min(px, h_w))
+                py = max(0, min(py, h_h))
+                pw = max(0, min(pw, h_w - px))
+                ph = max(0, min(ph, h_h - py))
+
+                if pw > 0 and ph > 0:
+                    debug_img = debug_ss_np[py:py+ph, px:px+pw]
+
+            debug_path = os.path.join(get_app_dir(), "debug_image_search_capture.png")
+            cv2.imwrite(debug_path, debug_img)
+            logger.debug(f"DEBUG_IMAGE: Saved capture to {debug_path} (Shape={debug_img.shape})")
+
+            # Check Template
+            if os.path.exists(target_image_path):
+                 tmpl = cv2.imread(target_image_path)
+                 if tmpl is not None:
+                     logger.debug(f"DEBUG_IMAGE: Template loaded. Shape={tmpl.shape}")
+                 else:
+                     logger.error(f"DEBUG_IMAGE: Failed to load template with cv2: {target_image_path}")
+            else:
+                 logger.error(f"DEBUG_IMAGE: Template file does not exist: {target_image_path}")
+
+        except Exception as e:
+            logger.error(f"DEBUG_IMAGE: Error saving debug info: {e}")
 
     # 1. Try Standard Search with Retina-Aware Capture
     try:
@@ -97,17 +100,8 @@ def find_image_on_screen(
             rx, ry, rw, rh = region
             
             # Determine Scale (Physical Width / Logical Width)
-            # We assume Mac screen width in points... strict way:
             from app.utils.screen_utils import get_screen_scale
             scale = get_screen_scale() 
-            # Or dedeuce from haystack width?
-            # get_screen_scale() uses Qt which is reliable.
-            
-            # If haystack is 2x larger than screen geometry, scale is 2.
-            # But simpler to just use get_screen_scale.
-            
-            # Verify if haystack is actually scaled
-            # If scale is 2.0, we expect haystack width to be screen_width * 2
             
             # Calculate Physical Region
             px = int(rx * scale)
@@ -125,120 +119,114 @@ def find_image_on_screen(
             if pw > 0 and ph > 0:
                 search_img = haystack[py:py+ph, px:px+pw]
                 crop_offset_x, crop_offset_y = px, py
-                logger.debug(f"DEBUG_IMAGE: Manual Crop (Scale={scale}): Region({rx},{ry}) -> Crop({px},{py},{pw},{ph})")
+                if debug_enabled:
+                    logger.debug(f"DEBUG_IMAGE: Manual Crop (Scale={scale}): Region({rx},{ry}) -> Crop({px},{py},{pw},{ph})")
             else:
-                logger.warning("DEBUG_IMAGE: Crop region is empty or out of bounds.")
+                if debug_enabled:
+                    logger.warning("DEBUG_IMAGE: Crop region is empty or out of bounds.")
                 return []
         
-        # C. Perform Search on 'search_img' using OpenCV directly (Skip PyAutoGUI wrapper for control)
-        # Load Template
-        if not os.path.exists(target_image_path):
-             logger.error(f"Template not found: {target_image_path}")
-             return []
+    # 1. Try Multi-Scale Search (Robust to Retina/Resolution mismatches)
+    # Scales to try: 1.0 (Exact), 0.5 (Downscale Template), 2.0 (Upscale Template - rare)
+    # Or 0.5 is often needed if Template is 2x (High Res) and Screen capture via PyAutoGUI is 1x?
+    # No, usually Template is 2x (captured via Overlay) and Screen is 2x (captured via PyAutoGUI).
+    # IF PyAutoGUI.locateOnScreen uses Apple's API which returns scaled coordinates, it might expect 1x image?
+    # Let's try explicit scaling.
+    
+    scales = [1.0]
+    
+    # Heuristic: Check dimensions
+    img_h, img_w = haystack.shape[:2]
+    
+    if os.path.exists(target_image_path):
+        tmpl = cv2.imread(target_image_path)
+        if tmpl is not None:
+             t_h, t_w = tmpl.shape[:2]
              
-        template = cv2.imread(target_image_path)
-        if template is None: return []
+             # If Template is huge (e.g. > 1/2 screen width) and we expect a small icon, maybe 0.5x?
+             # If Template is tiny (< 20px) and we are on Retina, maybe 2.0x?
+             
+             # Just always try 0.5 as secondary if 1.0 fails
+             if t_w > 50: # Only downscale if reasonable size
+                 scales.append(0.5)
+                 
+             # Try 2.0 if very small?
+             # scales.append(2.0)
+    
+    best_matches = []
+    
+    for scale_factor in scales:
+        if debug_enabled:
+            logger.debug(f"DEBUG_IMAGE: Searching with Scale={scale_factor}")
+            
+        current_search_img = search_img # Default
+        current_start_x = crop_offset_x
+        current_start_y = crop_offset_y
         
+        # We don't scale the Screen Image, we scale the TEMPLATE.
+        # It's faster to scale the template usually.
+        
+        # Load Template
+        template_original = cv2.imread(target_image_path)
+        if template_original is None: continue
+        
+        t_h, t_w = template_original.shape[:2]
+        
+        target_w = int(t_w * scale_factor)
+        target_h = int(t_h * scale_factor)
+        
+        if target_w < 1 or target_h < 1: continue
+        
+        if scale_factor != 1.0:
+            template_scaled = cv2.resize(template_original, (target_w, target_h), interpolation=cv2.INTER_AREA)
+        else:
+            template_scaled = template_original
+            
         # Match
-        res = cv2.matchTemplate(search_img, template, cv2.TM_CCOEFF_NORMED)
-        
-        # Threshold
-        loc = np.where(res >= confidence)
-        
-        matches = []
-        t_h, t_w = template.shape[:2]
-        for pt in zip(*loc[::-1]): # (x, y)
-            # pt is in search_img coordinates (Physical)
-            # Global Physical X = crop_offset_x + pt[0]
-            g_phys_x = crop_offset_x + pt[0]
-            g_phys_y = crop_offset_y + pt[1]
+        try:
+            res = cv2.matchTemplate(search_img, template_scaled, cv2.TM_CCOEFF_NORMED)
+            loc = np.where(res >= confidence)
             
-            # matches.append(pyautogui.Box(g_phys_x, g_phys_y, t_w, t_h)) # Failed: No attribute Box
-            # Use simple namedtuple-like object or just return tuples directly and adjust return
+            found_at_scale = []
+            for pt in zip(*loc[::-1]): # (x, y)
+                # pt is in search_img coordinates
+                g_phys_x = crop_offset_x + pt[0]
+                g_phys_y = crop_offset_y + pt[1]
+                
+                # We return coordinates of the MATCH box.
+                # Width/Height should be the SCALED template size? 
+                # Yes, technically execution logic doesn't care about size much, mainly center.
+                
+                class Box:
+                    def __init__(self, left, top, width, height):
+                        self.left = left
+                        self.top = top
+                        self.width = width
+                        self.height = height
+                
+                found_at_scale.append(Box(g_phys_x, g_phys_y, target_w, target_h))
             
-            # We will use a simple class to mimic PyAutoGUI Box for compatibility with lines below
-            class Box:
-                def __init__(self, left, top, width, height):
-                    self.left = left
-                    self.top = top
-                    self.width = width
-                    self.height = height
-            
-            matches.append(Box(g_phys_x, g_phys_y, t_w, t_h))
-            
-        logger.debug(f"DEBUG_IMAGE: Found {len(matches)} matches (Manual 2x)")
-        
-        if matches:
-             results = [(box.left, box.top, box.width, box.height) for box in matches]
-             return results
+            if found_at_scale:
+                if debug_enabled:
+                    logger.info(f"DEBUG_IMAGE: Found {len(found_at_scale)} matches at Scale {scale_factor}!")
+                best_matches = found_at_scale
+                break # Stop at first successful scale (Prioritize 1.0)
+                
+        except Exception as e:
+            logger.error(f"Error matching at scale {scale_factor}: {e}")
+            continue
+
+    if best_matches:
+         results = [(box.left, box.top, box.width, box.height) for box in best_matches]
+         return results
+
+    # Manual search consumed all logic. Removed fallback to pyautogui.locateAllOnScreen because it is opaque/unreliable on Retina.
+    # We trust our Manual OpenCV loop above.
 
     except Exception as e:
         logger.error(f"DEBUG_IMAGE: Manual search failed: {e}")
-        # pass # Fallthrough to standard search or fail
         
-    # If High-Res Manual Search failed (exception or no matches), try standard as fallback?
-    # Actually, standard sends to pyautogui which we know fails on size mismatch.
-    # So we should just continue.
-    
-    # 1. Try Standard Search (Fallback)
-    # If manual search handled it, we returned.
-    # If we are here, manual failed or found nothing.
-    try:
-        matches = list(pyautogui.locateAllOnScreen(
-            target_image_path,
-            confidence=confidence,
-            region=region,
-            grayscale=grayscale
-        ))
-        logger.debug(f"DEBUG_IMAGE: Found {len(matches)} matches (Standard)")
-    except (pyautogui.ImageNotFoundException, Exception) as e:
-        logger.debug(f"DEBUG_IMAGE: Standard search failed/empty: {e}")
-        pass
-        
-    if matches:
-        # Convert to list of tuples
-        results = [(box.left, box.top, box.width, box.height) for box in matches]
-        return results
-
-    # Load image once to check dimensions
-    template = cv2.imread(target_image_path)
-    if template is None:
-        return []
-        
-    h, w = template.shape[:2]
-
-    # 3. Try Downscaling (Retina Fix: 2x capture -> 1x effective search?)
-    # Only if image is large enough (> 40px). Downscaling small icons destroys them.
-    if w > 40 and h > 40:
-        logger.info(f"Grayscale search failed. Retrying with 50% scaled template (Retina fix)...")
-        try:
-            new_width = int(w * 0.5)
-            new_height = int(h * 0.5)
-            resized_template = cv2.resize(template, (new_width, new_height), interpolation=cv2.INTER_AREA)
-            
-            import tempfile, os
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                cv2.imwrite(tmp.name, resized_template)
-                tmp_path = tmp.name
-                
-            try:
-                matches = list(pyautogui.locateAllOnScreen(
-                    tmp_path,
-                    confidence=confidence,
-                    region=region,
-                    grayscale=grayscale
-                ))
-            finally:
-                if os.path.exists(tmp_path):
-                    os.remove(tmp_path)
-                    
-            if matches:
-                logger.info("Found matches with 50% scale fallback.")
-                results = [(box.left, box.top, box.width, box.height) for box in matches]
-                return results
-
-        except Exception as e:
-            logger.error(f"Error during fallback search: {e}")
+    return []
             
             
     # 4. Low Confidence Fallback removed per user feedback.
@@ -246,58 +234,55 @@ def find_image_on_screen(
     
     # If no matches found, run manual CV2 matching to generate debug info (Heatmap & Best Match)
     if not matches:
-        logger.info("Standard search failed. Running debug visualization...")
-        try:
-            # Re-read the debug capture we saved earlier
-            # We need to reconstruct the debug_path logic from above or just ensure we have the path.
-            # Just re-import and re-construct to be safe or assuming variable scope if defined.
-            # Since 'debug_path' is defined in the try block above, it might not be available here if that failed.
-            # But we can reconstruct:
-            from app.utils.common import get_app_dir
-            import os
-            debug_path = os.path.join(get_app_dir(), "debug_image_search_capture.png")
-            
-            if os.path.exists(debug_path):
-                # 1. Load Screen & Template
-                # dbg_img is BGR
-                screen_img = cv2.imread(debug_path)
-                tmpl_img = cv2.imread(target_image_path)
+        if debug_enabled:
+            logger.info("Standard search failed. Running debug visualization...")
+            try:
+                # Re-read the debug capture we saved earlier
+                from app.utils.common import get_app_dir
+                import os
+                debug_path = os.path.join(get_app_dir(), "debug_image_search_capture.png")
                 
-                if screen_img is not None and tmpl_img is not None:
-                     
-                     res = cv2.matchTemplate(screen_img, tmpl_img, cv2.TM_CCOEFF_NORMED)
-                     
-                     # 2. Save Heatmap
-                     # Normalize to 0-255
-                     heatmap = cv2.normalize(res, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
-                     heatmap_color = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-                     hm_path = os.path.join(get_app_dir(), "debug_image_heatmap.png")
-                     cv2.imwrite(hm_path, heatmap_color)
-                     
-                     # 3. Find Best Match
-                     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
-                     logger.info(f"DEBUG_IMAGE: Best match confidence: {max_val:.4f} at {max_loc}")
-                     
-                     # 4. Draw Best Match on Result
-                     h, w = tmpl_img.shape[:2]
-                     top_left = max_loc
-                     bottom_right = (top_left[0] + w, top_left[1] + h)
-                     
-                     result_img = screen_img.copy()
-                     # Red box for "Best Guess (Failed)"
-                     cv2.rectangle(result_img, top_left, bottom_right, (0, 0, 255), 2)
-                     
-                     # Add text with confidence
-                     text = f"Best: {max_val:.2f} (Req: {confidence})"
-                     cv2.putText(result_img, text, (top_left[0], top_left[1] - 10), 
-                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-                                 
-                     res_path = os.path.join(get_app_dir(), "debug_image_result.png")
-                     cv2.imwrite(res_path, result_img)
-                     logger.info(f"DEBUG_IMAGE: Saved result to {res_path}")
-
-        except Exception as e:
-            logger.error(f"DEBUG_IMAGE: Visualization failed: {e}")
+                if os.path.exists(debug_path):
+                    # 1. Load Screen & Template
+                    # dbg_img is BGR
+                    screen_img = cv2.imread(debug_path)
+                    tmpl_img = cv2.imread(target_image_path)
+                    
+                    if screen_img is not None and tmpl_img is not None:
+                         
+                         res = cv2.matchTemplate(screen_img, tmpl_img, cv2.TM_CCOEFF_NORMED)
+                         
+                         # 2. Save Heatmap
+                         # Normalize to 0-255
+                         heatmap = cv2.normalize(res, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
+                         heatmap_color = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+                         hm_path = os.path.join(get_app_dir(), "debug_image_heatmap.png")
+                         cv2.imwrite(hm_path, heatmap_color)
+                         
+                         # 3. Find Best Match
+                         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+                         logger.info(f"DEBUG_IMAGE: Best match confidence: {max_val:.4f} at {max_loc}")
+                         
+                         # 4. Draw Best Match on Result
+                         h, w = tmpl_img.shape[:2]
+                         top_left = max_loc
+                         bottom_right = (top_left[0] + w, top_left[1] + h)
+                         
+                         result_img = screen_img.copy()
+                         # Red box for "Best Guess (Failed)"
+                         cv2.rectangle(result_img, top_left, bottom_right, (0, 0, 255), 2)
+                         
+                         # Add text with confidence
+                         text = f"Best: {max_val:.2f} (Req: {confidence})"
+                         cv2.putText(result_img, text, (top_left[0], top_left[1] - 10), 
+                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+                                     
+                         res_path = os.path.join(get_app_dir(), "debug_image_result.png")
+                         cv2.imwrite(res_path, result_img)
+                         logger.info(f"DEBUG_IMAGE: Saved result to {res_path}")
+    
+            except Exception as e:
+                logger.error(f"DEBUG_IMAGE: Visualization failed: {e}")
 
     return []
 
@@ -354,6 +339,9 @@ def find_color_on_screen(
     import pyautogui
     import cv2
     import numpy as np
+    from app.utils.common import is_debug_mode
+    debug_enabled = is_debug_mode()
+    
     try:
         # 1. Parse Hex to BGR
         if target_hex.startswith('#'):
@@ -364,18 +352,21 @@ def find_color_on_screen(
         b = int(target_hex[4:6], 16)
         
         
-        logger.debug(f"DEBUG_COLOR: TargetHex={target_hex}, RGB=({r},{g},{b}), BGR=({b},{g},{r})")
+        if debug_enabled:
+            logger.debug(f"DEBUG_COLOR: TargetHex={target_hex}, RGB=({r},{g},{b}), BGR=({b},{g},{r})")
         
         # 2. Capture Screen
         screenshot = pyautogui.screenshot(region=region)
         img = np.array(screenshot)
-        logger.debug(f"DEBUG_COLOR: Captured Image Shape={img.shape}")
+        if debug_enabled:
+            logger.debug(f"DEBUG_COLOR: Captured Image Shape={img.shape}")
         
         # DEBUG: Save screenshot to verify what we are searching (User requested)
         import os
         from app.utils.common import get_app_dir
         debug_path = os.path.join(get_app_dir(), "debug_color_search.png")
-        logger.debug(f"DEBUG_COLOR: Saving debug image to {debug_path}")
+        if debug_enabled:
+            logger.debug(f"DEBUG_COLOR: Saving debug image to {debug_path}")
         cv2.imwrite(debug_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR)) # Save original capture
         
         # Handle RGBA (Mac) -> RGB
@@ -391,19 +382,22 @@ def find_color_on_screen(
         
         mask = cv2.inRange(img, lower, upper)
         
-        # DEBUG: Save mask
-        mask_path = os.path.join(get_app_dir(), "debug_color_mask.png")
-        cv2.imwrite(mask_path, mask)
+        if debug_enabled:
+            # DEBUG: Save mask
+            mask_path = os.path.join(get_app_dir(), "debug_color_mask.png")
+            cv2.imwrite(mask_path, mask)
         
         # 4. Find Contours (Connected Components)
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        logger.debug(f"DEBUG_COLOR: Found {len(contours)} contours")
+        if debug_enabled:
+            logger.debug(f"DEBUG_COLOR: Found {len(contours)} contours")
         
         # DEBUG: Log region and scale
         if region:
             from app.utils.screen_utils import get_screen_scale
             scale = get_screen_scale()
-            logger.debug(f"DEBUG_COLOR: Region provided={region}, Scale={scale}")
+            if debug_enabled:
+                logger.debug(f"DEBUG_COLOR: Region provided={region}, Scale={scale}")
             
             # Check if capture is 1x (Logical) or 2x (Physical)
             # Img shape is (H, W, C)
@@ -413,16 +407,19 @@ def find_color_on_screen(
             capture_scale = 1.0
             if abs(w_img - w_region * scale) < 5:
                 capture_scale = scale # Captured at 2x
-                logger.debug("DEBUG_COLOR: Capture is Physical (High-Res)")
+                if debug_enabled:
+                    logger.debug("DEBUG_COLOR: Capture is Physical (High-Res)")
             elif abs(w_img - w_region) < 5:
                 capture_scale = 1.0 # Captured at 1x
-                logger.debug("DEBUG_COLOR: Capture is Logical (Low-Res)")
+                if debug_enabled:
+                    logger.debug("DEBUG_COLOR: Capture is Logical (Low-Res)")
             else:
                  logger.warning(f"DEBUG_COLOR: Capture size mismatch? Img={w_img}, Region={w_region}")
         else:
             scale = 1.0 # Fallback
             capture_scale = 1.0
-            logger.debug("DEBUG_COLOR: No region provided (Full Screen)")
+            if debug_enabled:
+                logger.debug("DEBUG_COLOR: No region provided (Full Screen)")
             from app.utils.screen_utils import get_screen_scale
             scale = get_screen_scale()
 

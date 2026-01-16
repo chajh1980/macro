@@ -11,7 +11,7 @@ from app.ui.inspector import PropertyInspectorWidget
 from app.ui.overlay import Overlay
 from app.core.models import Workflow, Step, ConditionType, ActionType, Condition, Action, StepType
 from app.utils.common import get_workflows_dir
-from app.utils.screen_utils import get_screen_scale
+from app.utils.screen_utils import get_screen_scale, set_window_size_percentage
 import uuid
 
 class WorkflowEditor(QMainWindow):
@@ -23,7 +23,7 @@ class WorkflowEditor(QMainWindow):
         self.has_unsaved_changes = False
         
         self.setWindowTitle(f"Editing: {workflow_name}")
-        self.resize(1000, 700) # Resized per user request (was 1200x800)
+        set_window_size_percentage(self, width_pct=0.6, height_pct=0.5)
         
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -102,6 +102,12 @@ class WorkflowEditor(QMainWindow):
         
         # Signals for value changes
         self.inspector.step_props.step_changed.connect(self._on_step_changed_from_inspector)
+        self.inspector.workflow_props.workflow_changed.connect(self._on_workflow_props_changed)
+
+    def _on_workflow_props_changed(self):
+        self.has_unsaved_changes = True
+        self.setWindowTitle(f"Editing: {self.workflow_name} *")
+
 
     def _toggle_always_on_top(self, state):
         if state == 2: # Checked
@@ -683,7 +689,8 @@ class WorkflowEditor(QMainWindow):
         if self.has_unsaved_changes:
             reply = QMessageBox.question(
                 self, "Unsaved Changes", "Save changes before closing?",
-                QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel
+                QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Save
             )
             if reply == QMessageBox.StandardButton.Save:
                 self._save_workflow()
