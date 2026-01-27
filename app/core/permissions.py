@@ -62,18 +62,41 @@ def request_accessibility_permission():
 
 def check_screen_recording_permission():
     """
-    Check screen recording permission.
-    This is harder to check without triggering it.
-    We can try taking a 1x1 screenshot. If it's all black or fails, we might not have permission.
-    But on macOS 10.15+, it prompts.
+    Check screen recording permission by actually trying to capture screen.
+    Returns True if screenshot works, False otherwise.
     """
     if sys.platform != "darwin":
         return True
-        
-    # We can't easily check "is granted" without trying.
-    # But we can assume if we can't see windows, we don't have it.
-    # For MVP, we might just rely on the user reporting "black screen" or "not finding image".
-    return True # Placeholder for now, as checking it is invasive.
+
+    # Test by actually taking a screenshot
+    try:
+        import pyautogui
+        # Take a small 1x1 screenshot to test permission
+        # This should be fast and minimally invasive
+        test_ss = pyautogui.screenshot(region=(0, 0, 1, 1))
+
+        # Check if we got valid image data (not all black/transparent)
+        import numpy as np
+        img_np = np.array(test_ss)
+
+        # On macOS without permission, screenshot is typically 1x1 black image
+        # or returns data that's all zeros
+        if img_np.size > 0 and not np.all(img_np == 0):
+            # We got actual screenshot data, permission likely granted
+            return True
+        else:
+            # All black or empty, permission likely denied
+            print("Screen capture test failed: got black/empty image")
+            return False
+
+    except pyautogui.ImageNotFoundException:
+        # Screenshot failed completely
+        print("Screen capture failed: ImageNotFoundException")
+        return False
+    except Exception as e:
+        # Other error during screenshot
+        print(f"Screen capture test failed with exception: {e}")
+        return False
 
 def open_system_settings(pane_id):
     """
@@ -89,9 +112,44 @@ def open_system_settings(pane_id):
 def ensure_permissions(parent=None):
     """
     Check and guide user for permissions.
+    Returns True if all permissions granted, False otherwise.
     """
     if sys.platform != "darwin":
         return True
+
+    # Check accessibility permission
+    if not check_accessibility_permission():
+        msg = QMessageBox(parent)
+        msg.setWindowTitle("권한 필요")
+        msg.setText("매크로 실행을 위해 '손쉬운 사용' 권한이 필요합니다.")
+        msg.setInformativeText("시스템 설정 > 개인정보 보호 및 보안 > 손쉬운 사용\n에서 터미널(또는 Python)을 허용해 주세요.")
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+        msg.button(QMessageBox.StandardButton.Ok).setText("설정 열기")
+
+        ret = msg.exec()
+        if ret == QMessageBox.StandardButton.Ok:
+            # Open settings
+            subprocess.run(["open", "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"])
+
+        return False
+
+    # Check screen recording permission
+    if not check_screen_recording_permission():
+        msg = QMessageBox(parent)
+        msg.setWindowTitle("화면 기록 권한 필요")
+        msg.setText("스크린샷 캡처를 위해 '화면 기록' 권한이 필요합니다.")
+        msg.setInformativeText("화면 기록 권한이 없으면 이미지 인식이 작동하지 않습니다.\n\n시스템 설정 > 개인정보 보호 및 보안 > 화면 기록\n에서 이 앱을 허용해 주세요.")
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+        msg.button(QMessageBox.StandardButton.Ok).setText("설정 열기")
+
+        ret = msg.exec()
+        if ret == QMessageBox.StandardButton.Ok:
+            # Open settings for screen recording
+            subprocess.run(["open", "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenRecording"])
+
+        return False
+
+    return True
 
     if not check_accessibility_permission():
         msg = QMessageBox(parent)

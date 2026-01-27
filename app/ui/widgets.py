@@ -23,7 +23,30 @@ class StepPropertiesWidget(QWidget):
         
         self.name_edit = QLineEdit()
         self.command_combo = QComboBox()
-        self.command_combo.addItems(["Find Image", "Find Color", "Move Mouse", "Click Mouse", "Wait", "Loop", "Await", "Goto", "Input"])
+        self.command_combo.addItems(["Find Image", "Find Color", "Move Mouse", "Click Mouse", "Wait", "Loop", "Await", "Goto", "Input", "Key Press"])
+        self.command_combo.setEnabled(False) # Prevent changing type
+        
+        top_layout.addRow("Step Name:", self.name_edit)
+        top_layout.addRow("Step Type:", self.command_combo)
+        self.layout.addWidget(top_group)
+        
+        # --- Stacked Pages ---
+        self.stack = PyQt6.QtWidgets.QStackedWidget()
+        self.layout.addWidget(self.stack)
+
+        # ... (Previous Pages 0-8 skipped for brevity) ...
+        # I cannot skip lines in replacement content unless I include them.
+        # But I requested to replace lines 24-35? No, I need to insert page_key at the end.
+        # I will replace the command_combo init first.
+        
+        # Wait, I should do multiple replacements.
+        # 1. Update addItems (Line 26)
+        # 2. Add page_key (After page_input, Line 193)
+        
+        # This replaces lines 24-27
+        self.name_edit = QLineEdit()
+        self.command_combo = QComboBox()
+        self.command_combo.addItems(["Find Image", "Find Color", "Move Mouse", "Click Mouse", "Wait", "Loop", "Await", "Goto", "Input", "Key Press"])
         self.command_combo.setEnabled(False) # Prevent changing type
         
         top_layout.addRow("Step Name:", self.name_edit)
@@ -192,6 +215,23 @@ class StepPropertiesWidget(QWidget):
         layout_input.addRow("Save to Variable:", self.input_var_name)
         self.stack.addWidget(self.page_input)
 
+        # 9. Key Press
+        self.page_key = QWidget()
+        layout_key = QFormLayout()
+        self.page_key.setLayout(layout_key)
+        
+        self.key_seq_edit = QLineEdit()
+        self.key_seq_edit.setPlaceholderText("e.g. enter, ctrl+c, or Text to type")
+        
+        self.key_mode_combo = QComboBox()
+        self.key_mode_combo.addItems(["Press Key(s) (Hotkeys)", "Type Text (String)"])
+        
+        layout_key.addRow("Key / Text:", self.key_seq_edit)
+        layout_key.addRow("Mode:", self.key_mode_combo)
+        layout_key.addRow(QLabel("Note: For 'Press', use '+' for combinations (e.g. command+c)."))
+        
+        self.stack.addWidget(self.page_key)
+
         # Update Loop Page with Variable option
         # We need to recreate or modify the layout logic for Loop since we can't easily insert into existing layout via 'replace' if we don't see it all.
         # But we saw valid Loop logic above. I will modify the previous block (Loop Page) separately or rely on 'load_step' handling visibility.
@@ -248,7 +288,12 @@ class StepPropertiesWidget(QWidget):
         self.loop_mode_combo.currentIndexChanged.connect(self._sync_data)
         self.loop_max_count.valueChanged.connect(self._sync_data)
         self.loop_use_var_cb.toggled.connect(self._sync_data)
+        self.loop_use_var_cb.toggled.connect(self._sync_data)
         self.loop_var_name.textChanged.connect(self._sync_data)
+        
+        # Key Press
+        self.key_seq_edit.textChanged.connect(self._sync_data)
+        self.key_mode_combo.currentIndexChanged.connect(self._sync_data)
         
     def _on_combo_changed(self, idx):
         self.stack.setCurrentIndex(idx)
@@ -331,9 +376,16 @@ class StepPropertiesWidget(QWidget):
             elif step.action.type == ActionType.CLICK and step.condition.type == ConditionType.TIME: idx = 3
             elif step.action.type == ActionType.NONE and step.condition.type == ConditionType.TIME: idx = 4 # Wait
             elif step.action.type == ActionType.GOTO: idx = 7
+            elif step.action.type == ActionType.KEY: idx = 9
             
             self.command_combo.setCurrentIndex(idx)
             self.stack.setCurrentIndex(idx)
+            
+            if idx == 9:
+                self.key_seq_edit.setText(step.action.key_sequence or "")
+                from app.core.models import KeyInputMode
+                is_press = (step.action.key_mode == KeyInputMode.PRESS)
+                self.key_mode_combo.setCurrentIndex(0 if is_press else 1)
         
         # Populate Common Fields
         # ... (Image, Color, etc populated in previous logic, or below if shared)
@@ -457,6 +509,17 @@ class StepPropertiesWidget(QWidget):
              self.current_step.action.type = ActionType.NONE
              self.current_step.action.input_prompt = self.input_prompt.text()
              self.current_step.action.input_variable_name = self.input_var_name.text()
+             
+        # 9. Key Press
+        elif idx == 9:
+             self.current_step.type = StepType.GENERAL # Key Press is a General step action
+             self.current_step.condition.type = ConditionType.TIME # Default to immediate/timer
+             self.current_step.condition.wait_time_s = 0
+             self.current_step.action.type = ActionType.KEY
+             
+             self.current_step.action.key_sequence = self.key_seq_edit.text()
+             from app.core.models import KeyInputMode
+             self.current_step.action.key_mode = KeyInputMode.PRESS if self.key_mode_combo.currentIndex() == 0 else KeyInputMode.TYPE
             
         self.step_changed.emit(self.current_step)
 

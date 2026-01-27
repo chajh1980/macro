@@ -35,11 +35,17 @@ logger.info(f"Python: {sys.version}")
 logger.info(f"Platform: {sys.platform}")
 
 from app.utils.common import setup_logging as app_setup_logging
-# We can continue using the file logger or switch/add the app one.
+from app.core.permissions import ensure_permissions
+# We can continue using the file logger or switch/add to app one.
 # For now let's rely on the global file config we just set.
 
 
 def main():
+    # Check permissions before starting app
+    if not ensure_permissions():
+        logger.error("Required permissions not granted. Exiting.")
+        sys.exit(1)
+
     app = QApplication(sys.argv)
     
     # Global references to keep windows alive
@@ -50,14 +56,31 @@ def main():
             editor = WorkflowEditor(name, lambda: windows.pop("editor", None))
             windows["editor"] = editor
             editor.show()
+        except ImportError as e:
+            from PyQt6.QtWidgets import QMessageBox
+            logger.error(f"Failed to open editor: Missing dependency - {e}")
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Icon.Critical)
+            msg.setWindowTitle("Component Missing")
+            msg.setText("Required component not found:\n\nPlease ensure all dependencies are installed.")
+            msg.setInformativeText(f"Error: {e}")
+            msg.exec()
+        except FileNotFoundError as e:
+            from PyQt6.QtWidgets import QMessageBox
+            logger.error(f"Failed to open editor: Workflow not found - {e}")
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setWindowTitle("Workflow Not Found")
+            msg.setText(f"Workflow '{name}' not found.\n\nPlease create a new workflow or select an existing one.")
+            msg.setInformativeText(f"Error: {e}")
+            msg.exec()
         except Exception as e:
             from PyQt6.QtWidgets import QMessageBox
-            # Show error logic even if we don't have a parent window easily accessible, 
-            # we can use the active window or None (if app exists)
             logger.error(f"Failed to open editor: {e}")
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Icon.Critical)
             msg.setText(f"Error opening editor for '{name}':\n{e}")
+            msg.setInformativeText("Please check the workflow file and try again.")
             msg.exec()
         # We might want to hide manager or keep it open?
         # PRD 3.0: "Workflow Manager... Select -> Edit".

@@ -3,7 +3,7 @@ import logging
 import pyautogui
 from typing import Optional
 from PyQt6.QtCore import QObject, pyqtSignal
-from app.core.models import Workflow, Step, ConditionType, ActionType, ImageMatchMode, StepType, LoopMode
+from app.core.models import Workflow, Step, ConditionType, ActionType, ImageMatchMode, StepType, LoopMode, KeyInputMode
 from app.core.image_proc import find_image_on_screen, sort_matches, deduplicate_matches
 # from app.core.ocr import find_text_on_screen # Lazy loaded
 from app.utils.screen_utils import physical_to_logical
@@ -446,6 +446,25 @@ class WorkflowRunner(QObject):
              if action.target_x is not None and action.target_y is not None and (action.target_x != 0 or action.target_y != 0):
                  pyautogui.moveTo(action.target_x, action.target_y)
              pyautogui.click()
+
+        elif action.type == ActionType.KEY:
+            if not action.key_sequence:
+                return
+            
+            mode = action.key_mode
+            if mode == KeyInputMode.PRESS:
+                # Handle compound keys (e.g. "ctrl+c")
+                keys = action.key_sequence.split('+')
+                keys = [k.strip().lower() for k in keys]
+                
+                self.log_signal.emit(f"Key Pressing: {keys}")
+                # pyautogui.hotkey(*keys) handles multiple keys down/up correctly
+                pyautogui.hotkey(*keys)
+                
+            elif mode == KeyInputMode.TYPE:
+                self.log_signal.emit(f"Typing: {action.key_sequence}")
+                # interval=0.1 to be realistic/safe?
+                pyautogui.write(action.key_sequence, interval=0.05)
              
     def _handle_sequential_click(self, step: Step):
         image_path = step.condition.target_image_path

@@ -126,164 +126,79 @@ def find_image_on_screen(
                     logger.warning("DEBUG_IMAGE: Crop region is empty or out of bounds.")
                 return []
         
-    # 1. Try Multi-Scale Search (Robust to Retina/Resolution mismatches)
-    # Scales to try: 1.0 (Exact), 0.5 (Downscale Template), 2.0 (Upscale Template - rare)
-    # Or 0.5 is often needed if Template is 2x (High Res) and Screen capture via PyAutoGUI is 1x?
-    # No, usually Template is 2x (captured via Overlay) and Screen is 2x (captured via PyAutoGUI).
-    # IF PyAutoGUI.locateOnScreen uses Apple's API which returns scaled coordinates, it might expect 1x image?
-    # Let's try explicit scaling.
-    
-    scales = [1.0]
-    
-    # Heuristic: Check dimensions
-    img_h, img_w = haystack.shape[:2]
-    
-    if os.path.exists(target_image_path):
-        tmpl = cv2.imread(target_image_path)
-        if tmpl is not None:
-             t_h, t_w = tmpl.shape[:2]
-             
-             # If Template is huge (e.g. > 1/2 screen width) and we expect a small icon, maybe 0.5x?
-             # If Template is tiny (< 20px) and we are on Retina, maybe 2.0x?
-             
-             # Just always try 0.5 as secondary if 1.0 fails
-             if t_w > 50: # Only downscale if reasonable size
-                 scales.append(0.5)
-                 
-             # Try 2.0 if very small?
-             # scales.append(2.0)
-    
-    best_matches = []
-    
-    for scale_factor in scales:
-        if debug_enabled:
-            logger.debug(f"DEBUG_IMAGE: Searching with Scale={scale_factor}")
-            
-        current_search_img = search_img # Default
-        current_start_x = crop_offset_x
-        current_start_y = crop_offset_y
-        
-        # We don't scale the Screen Image, we scale the TEMPLATE.
-        # It's faster to scale the template usually.
-        
-        # Load Template
-        template_original = cv2.imread(target_image_path)
-        if template_original is None: continue
-        
-        t_h, t_w = template_original.shape[:2]
-        
-        target_w = int(t_w * scale_factor)
-        target_h = int(t_h * scale_factor)
-        
-        if target_w < 1 or target_h < 1: continue
-        
-        if scale_factor != 1.0:
-            template_scaled = cv2.resize(template_original, (target_w, target_h), interpolation=cv2.INTER_AREA)
-        else:
-            template_scaled = template_original
-            
-        # Match
-        try:
-            res = cv2.matchTemplate(search_img, template_scaled, cv2.TM_CCOEFF_NORMED)
-            loc = np.where(res >= confidence)
-            
-            found_at_scale = []
-            for pt in zip(*loc[::-1]): # (x, y)
-                # pt is in search_img coordinates
-                g_phys_x = crop_offset_x + pt[0]
-                g_phys_y = crop_offset_y + pt[1]
-                
-                # We return coordinates of the MATCH box.
-                # Width/Height should be the SCALED template size? 
-                # Yes, technically execution logic doesn't care about size much, mainly center.
-                
-                class Box:
-                    def __init__(self, left, top, width, height):
-                        self.left = left
-                        self.top = top
-                        self.width = width
-                        self.height = height
-                
-                found_at_scale.append(Box(g_phys_x, g_phys_y, target_w, target_h))
-            
-            if found_at_scale:
-                if debug_enabled:
-                    logger.info(f"DEBUG_IMAGE: Found {len(found_at_scale)} matches at Scale {scale_factor}!")
-                best_matches = found_at_scale
-                break # Stop at first successful scale (Prioritize 1.0)
-                
-        except Exception as e:
-            logger.error(f"Error matching at scale {scale_factor}: {e}")
-            continue
+        # 1. Try Multi-Scale Search (Robust to Retina/Resolution mismatches)
+        scales = [1.0]
 
-    if best_matches:
-         results = [(box.left, box.top, box.width, box.height) for box in best_matches]
-         return results
+        # Heuristic: Check dimensions
+        img_h, img_w = haystack.shape[:2]
 
-    # Manual search consumed all logic. Removed fallback to pyautogui.locateAllOnScreen because it is opaque/unreliable on Retina.
-    # We trust our Manual OpenCV loop above.
+        if os.path.exists(target_image_path):
+            tmpl = cv2.imread(target_image_path)
+            if tmpl is not None:
+                 t_h, t_w = tmpl.shape[:2]
+                 if t_w > 50: 
+                     scales.append(0.5)
+
+        best_matches = []
+
+        for scale_factor in scales:
+            if debug_enabled:
+                logger.debug(f"DEBUG_IMAGE: Searching with Scale={scale_factor}")
+
+            # Load Template
+            template_original = cv2.imread(target_image_path)
+            if template_original is None: continue
+
+            t_h, t_w = template_original.shape[:2]
+
+            target_w = int(t_w * scale_factor)
+            target_h = int(t_h * scale_factor)
+
+            if target_w < 1 or target_h < 1: continue
+
+            if scale_factor != 1.0:
+                template_scaled = cv2.resize(template_original, (target_w, target_h), interpolation=cv2.INTER_AREA)
+            else:
+                template_scaled = template_original
+
+            # Match
+            try:
+                res = cv2.matchTemplate(search_img, template_scaled, cv2.TM_CCOEFF_NORMED)
+                loc = np.where(res >= confidence)
+
+                found_at_scale = []
+                for pt in zip(*loc[::-1]): # (x, y)
+                    # pt is in search_img coordinates
+                    g_phys_x = crop_offset_x + pt[0]
+                    g_phys_y = crop_offset_y + pt[1]
+                    
+                    class Box:
+                        def __init__(self, left, top, width, height):
+                            self.left = left
+                            self.top = top
+                            self.width = width
+                            self.height = height
+
+                    found_at_scale.append(Box(g_phys_x, g_phys_y, target_w, target_h))
+
+                if found_at_scale:
+                    if debug_enabled:
+                        logger.info(f"DEBUG_IMAGE: Found {len(found_at_scale)} matches at Scale {scale_factor}!")
+                    best_matches = found_at_scale
+                    break # Stop at first successful scale
+
+            except Exception as e:
+                logger.error(f"Error matching at scale {scale_factor}: {e}")
+                continue
+
+        if best_matches:
+             results = [(box.left, box.top, box.width, box.height) for box in best_matches]
+             return results
 
     except Exception as e:
         logger.error(f"DEBUG_IMAGE: Manual search failed: {e}")
+        # pass # Fallthrough to standard search or fail
         
-    return []
-            
-            
-    # 4. Low Confidence Fallback removed per user feedback.
-    # It causes false positives on state-sensitive icons (different colors).
-    
-    # If no matches found, run manual CV2 matching to generate debug info (Heatmap & Best Match)
-    if not matches:
-        if debug_enabled:
-            logger.info("Standard search failed. Running debug visualization...")
-            try:
-                # Re-read the debug capture we saved earlier
-                from app.utils.common import get_app_dir
-                import os
-                debug_path = os.path.join(get_app_dir(), "debug_image_search_capture.png")
-                
-                if os.path.exists(debug_path):
-                    # 1. Load Screen & Template
-                    # dbg_img is BGR
-                    screen_img = cv2.imread(debug_path)
-                    tmpl_img = cv2.imread(target_image_path)
-                    
-                    if screen_img is not None and tmpl_img is not None:
-                         
-                         res = cv2.matchTemplate(screen_img, tmpl_img, cv2.TM_CCOEFF_NORMED)
-                         
-                         # 2. Save Heatmap
-                         # Normalize to 0-255
-                         heatmap = cv2.normalize(res, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
-                         heatmap_color = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-                         hm_path = os.path.join(get_app_dir(), "debug_image_heatmap.png")
-                         cv2.imwrite(hm_path, heatmap_color)
-                         
-                         # 3. Find Best Match
-                         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
-                         logger.info(f"DEBUG_IMAGE: Best match confidence: {max_val:.4f} at {max_loc}")
-                         
-                         # 4. Draw Best Match on Result
-                         h, w = tmpl_img.shape[:2]
-                         top_left = max_loc
-                         bottom_right = (top_left[0] + w, top_left[1] + h)
-                         
-                         result_img = screen_img.copy()
-                         # Red box for "Best Guess (Failed)"
-                         cv2.rectangle(result_img, top_left, bottom_right, (0, 0, 255), 2)
-                         
-                         # Add text with confidence
-                         text = f"Best: {max_val:.2f} (Req: {confidence})"
-                         cv2.putText(result_img, text, (top_left[0], top_left[1] - 10), 
-                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-                                     
-                         res_path = os.path.join(get_app_dir(), "debug_image_result.png")
-                         cv2.imwrite(res_path, result_img)
-                         logger.info(f"DEBUG_IMAGE: Saved result to {res_path}")
-    
-            except Exception as e:
-                logger.error(f"DEBUG_IMAGE: Visualization failed: {e}")
-
     return []
 
 def sort_matches(matches: List[Tuple[int, int, int, int]]) -> List[Tuple[int, int, int, int]]:

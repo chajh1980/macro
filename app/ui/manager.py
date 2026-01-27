@@ -6,32 +6,33 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from app.utils.common import get_workflows_dir
 from app.core.models import Workflow
+from app.utils.screen_utils import set_window_size_percentage
 
 class WorkflowManager(QWidget):
     def __init__(self, on_edit_workflow, on_run_workflow):
         super().__init__()
         self.on_edit_workflow = on_edit_workflow
         self.on_run_workflow = on_run_workflow
-        
+
         self.setWindowTitle("Visual Macro Manager")
-        self.resize(400, 300)
-        
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
-        
+        set_window_size_percentage(self, width_pct=0.3, height_pct=0.3)
+
+        self.main_layout = QVBoxLayout()
+        self.setLayout(self.main_layout)
+
         # Top Bar
         top_layout = QHBoxLayout()
         self.label = QLabel("Available Workflows:")
         self.always_on_top_cb = QCheckBox("Always on Top")
         self.always_on_top_cb.stateChanged.connect(self._toggle_always_on_top)
-        
+
         top_layout.addWidget(self.label)
         top_layout.addStretch()
         top_layout.addWidget(self.always_on_top_cb)
-        self.layout.addLayout(top_layout)
+        self.main_layout.addLayout(top_layout)
         
         self.list_widget = QListWidget()
-        self.layout.addWidget(self.list_widget)
+        self.main_layout.addWidget(self.list_widget)
         
         btn_layout = QHBoxLayout()
         self.new_btn = QPushButton("New")
@@ -43,7 +44,7 @@ class WorkflowManager(QWidget):
         btn_layout.addWidget(self.edit_btn)
         btn_layout.addWidget(self.run_btn)
         btn_layout.addWidget(self.del_btn)
-        self.layout.addLayout(btn_layout)
+        self.main_layout.addLayout(btn_layout)
         
         # Connect
         self.new_btn.clicked.connect(self._new_workflow)
