@@ -3,7 +3,7 @@ import os
 import logging
 from PyQt6.QtWidgets import QApplication
 from app.ui.manager import WorkflowManager
-from app.ui.editor import WorkflowEditor
+from app.ui.workflow_editor_v2 import launch_v2_editor
 from app.core.engine import WorkflowRunner
 from app.ui.runner import RunnerWindow
 from app.core.models import Workflow
@@ -53,7 +53,7 @@ def main():
     
     def on_edit_workflow(name):
         try:
-            editor = WorkflowEditor(name, lambda: windows.pop("editor", None))
+            editor = launch_v2_editor(name, lambda: windows.pop("editor", None))
             windows["editor"] = editor
             editor.show()
         except ImportError as e:

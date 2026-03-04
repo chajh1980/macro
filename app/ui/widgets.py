@@ -20,57 +20,79 @@ class StepPropertiesWidget(QWidget):
         top_group = QGroupBox("General")
         top_layout = QFormLayout()
         top_group.setLayout(top_layout)
+        self.setStyleSheet(
+            """
+            QLineEdit {
+                background: #ffffff;
+                color: #0f172a;
+                border: 1px solid #93c5fd;
+                border-radius: 6px;
+                padding: 6px 8px;
+                min-height: 18px;
+            }
+            QLineEdit:disabled {
+                background: #f8fafc;
+                color: #94a3b8;
+            }
+            QAbstractSpinBox {
+                background: #ffffff;
+                color: #0f172a;
+                border: 1px solid #93c5fd;
+                border-radius: 6px;
+                padding: 4px 8px;
+                min-height: 24px;
+            }
+            QAbstractSpinBox:disabled {
+                background: #f8fafc;
+                color: #94a3b8;
+            }
+            QLabel {
+                color: #1f2937;
+            }
+            QCheckBox {
+                color: #1f2937;
+            }
+            """
+        )
         
         self.name_edit = QLineEdit()
         self.command_combo = QComboBox()
-        self.command_combo.addItems(["Find Image", "Find Color", "Move Mouse", "Click Mouse", "Wait", "Loop", "Await", "Goto", "Input", "Key Press"])
+        self.command_combo.addItems(["Find Image", "Find Color", "Move Mouse", "Click Mouse", "Wait", "Loop", "Await", "Goto", "Input", "Key Press", "Break"])
         self.command_combo.setEnabled(False) # Prevent changing type
+        self.command_combo.setVisible(False)
+        self.step_type_label = QLabel("Type:")
+        self.type_display = QLabel("")
         
         top_layout.addRow("Step Name:", self.name_edit)
-        top_layout.addRow("Step Type:", self.command_combo)
+        top_layout.addRow(self.step_type_label, self.type_display)
         self.layout.addWidget(top_group)
         
         # --- Stacked Pages ---
         self.stack = PyQt6.QtWidgets.QStackedWidget()
         self.layout.addWidget(self.stack)
 
-        # ... (Previous Pages 0-8 skipped for brevity) ...
-        # I cannot skip lines in replacement content unless I include them.
-        # But I requested to replace lines 24-35? No, I need to insert page_key at the end.
-        # I will replace the command_combo init first.
-        
-        # Wait, I should do multiple replacements.
-        # 1. Update addItems (Line 26)
-        # 2. Add page_key (After page_input, Line 193)
-        
-        # This replaces lines 24-27
-        self.name_edit = QLineEdit()
-        self.command_combo = QComboBox()
-        self.command_combo.addItems(["Find Image", "Find Color", "Move Mouse", "Click Mouse", "Wait", "Loop", "Await", "Goto", "Input", "Key Press"])
-        self.command_combo.setEnabled(False) # Prevent changing type
-        
-        top_layout.addRow("Step Name:", self.name_edit)
-        top_layout.addRow("Step Type:", self.command_combo)
-        self.layout.addWidget(top_group)
-        
-        # --- Stacked Pages ---
-        self.stack = PyQt6.QtWidgets.QStackedWidget()
-        self.layout.addWidget(self.stack)
-        
-        # 0. Find Image
-        self.page_image = QWidget()
-        layout_img = QFormLayout()
-        self.page_image.setLayout(layout_img)
-        
-        self.img_path_edit = QLineEdit()
-        self.capture_img_btn = QPushButton("Capture Image")
-# ... (Image Page content preserved implicitly by not changing lines 44-63) ...
-# I need to be careful not to delete content. I will use the EndLine carefully.
-# Actually, I should just update the combo box items first.
-# Then add the Goto page at the end.
-
-# Let's split this into two edits for safety. 
-# Edit 1: Update Combo Items and create Page 7 (Goto).
+        combo_style = """
+            QComboBox {
+                background-color: #ffffff;
+                color: #0f172a;
+                border: 1px solid #93c5fd;
+                border-radius: 6px;
+                padding: 4px 28px 4px 8px;
+                min-height: 26px;
+                font-size: 13px;
+            }
+            QComboBox:hover {
+                border-color: #60a5fa;
+            }
+            QComboBox QAbstractItemView {
+                background: #ffffff;
+                color: #0f172a;
+                selection-background-color: #dbeafe;
+                selection-color: #0f172a;
+                border: 1px solid #93c5fd;
+            }
+        """
+        self.command_combo.setStyleSheet(combo_style)
         
         # 0. Find Image
         self.page_image = QWidget()
@@ -162,12 +184,20 @@ class StepPropertiesWidget(QWidget):
         # Loop Mode
         self.loop_mode_combo = QComboBox()
         self.loop_mode_combo.addItems(["Run While Condition is Met (While)", "Run Until Condition is Met (Until)"])
+        self.loop_mode_combo.setStyleSheet(combo_style)
         layout_loop.addRow("Loop Mode:", self.loop_mode_combo)
         
         # Max Count
         self.loop_max_count = QSpinBox()
         self.loop_max_count.setRange(1, 99999)
         self.loop_max_count.setValue(100)
+        
+        # While(1) / Infinite Loop
+        self.loop_infinite_cb = QCheckBox("while(1) / Infinite")
+        layout_loop.addRow("Infinite Loop:", self.loop_infinite_cb)
+        self.loop_infinite_cb.toggled.connect(
+            lambda checked: self.loop_max_count.setEnabled(not checked)
+        )
         
         # Variable Override
         self.loop_use_var_cb = QCheckBox("Use Variable?")
@@ -192,7 +222,7 @@ class StepPropertiesWidget(QWidget):
         self.page_await.setLayout(layout_await)
         self.await_timeout = QDoubleSpinBox(); self.await_timeout.setRange(0, 3600); self.await_timeout.setValue(10.0)
         self.await_interval = QSpinBox(); self.await_interval.setRange(10, 10000); self.await_interval.setValue(500); self.await_interval.setSuffix(" ms")
-        layout_await.addRow(QLabel("Waits for child steps to succeed."))
+        layout_await.addRow(QLabel("Waits until the 1st child step succeeds, then runs remaining child steps once."))
         layout_await.addRow("Max Duration (Limit) (s):", self.await_timeout)
         layout_await.addRow("Retry Delay (Interval):", self.await_interval)
         self.stack.addWidget(self.page_await)
@@ -225,12 +255,23 @@ class StepPropertiesWidget(QWidget):
         
         self.key_mode_combo = QComboBox()
         self.key_mode_combo.addItems(["Press Key(s) (Hotkeys)", "Type Text (String)"])
+        self.key_mode_combo.setStyleSheet(combo_style)
         
         layout_key.addRow("Key / Text:", self.key_seq_edit)
         layout_key.addRow("Mode:", self.key_mode_combo)
         layout_key.addRow(QLabel("Note: For 'Press', use '+' for combinations (e.g. command+c)."))
         
         self.stack.addWidget(self.page_key)
+
+        # 10. Break
+        self.page_break = QWidget()
+        layout_break = QFormLayout()
+        self.page_break.setLayout(layout_break)
+        break_desc = QLabel("동일한 루프 안에서 \"Break\"가 실행되면 현재 루프를 즉시 종료합니다.")
+        break_desc.setWordWrap(True)
+        break_desc.setStyleSheet("color: #1f2937;")
+        layout_break.addRow(break_desc)
+        self.stack.addWidget(self.page_break)
 
         # Update Loop Page with Variable option
         # We need to recreate or modify the layout logic for Loop since we can't easily insert into existing layout via 'replace' if we don't see it all.
@@ -288,7 +329,7 @@ class StepPropertiesWidget(QWidget):
         self.loop_mode_combo.currentIndexChanged.connect(self._sync_data)
         self.loop_max_count.valueChanged.connect(self._sync_data)
         self.loop_use_var_cb.toggled.connect(self._sync_data)
-        self.loop_use_var_cb.toggled.connect(self._sync_data)
+        self.loop_infinite_cb.toggled.connect(self._sync_data)
         self.loop_var_name.textChanged.connect(self._sync_data)
         
         # Key Press
@@ -297,6 +338,7 @@ class StepPropertiesWidget(QWidget):
         
     def _on_combo_changed(self, idx):
         self.stack.setCurrentIndex(idx)
+        self.type_display.setText(self.command_combo.itemText(idx))
         self._sync_data()
         
     def _on_img_fullscreen_toggled(self, checked):
@@ -325,25 +367,33 @@ class StepPropertiesWidget(QWidget):
         idx = 0
         if step.type == StepType.AWAIT: idx = 6
         elif step.type == StepType.IF: idx = 6 
-        elif step.type == StepType.UNTIL: idx = 6
-        # 0. Await
+        elif step.type == StepType.UNTIL: idx = 5
+        elif step.type == StepType.BREAK: idx = 10
+        # 6. Await
         if step.type == StepType.AWAIT:
             self.command_combo.setCurrentIndex(6)
+            self.type_display.setText(self.command_combo.itemText(6))
             self.stack.setCurrentIndex(6)
             self.await_timeout.setValue(step.condition.retry_timeout_s or 10.0)
             self.await_interval.setValue(step.condition.retry_interval_ms or 500)
             self.blockSignals(False)
             return
-
-        # 0.5 Loop
-        if step.type == StepType.LOOP:
+        elif step.type == StepType.BREAK:
+            self.command_combo.setCurrentIndex(10)
+            self.type_display.setText(self.command_combo.itemText(10))
+            self.stack.setCurrentIndex(10)
+            self.blockSignals(False)
+            return
+        elif step.type in [StepType.LOOP, StepType.UNTIL]:
             self.command_combo.setCurrentIndex(5) # Goto/Loop page index
+            self.type_display.setText(self.command_combo.itemText(5))
             self.stack.setCurrentIndex(5) # Page Loop
             
             # Load Loop Config
             from app.core.models import LoopMode
             self.loop_mode_combo.setCurrentIndex(0 if step.condition.loop_mode == LoopMode.WHILE_FOUND else 1)
             self.loop_max_count.setValue(step.condition.loop_max_count or 100)
+            self.loop_infinite_cb.setChecked(bool(step.condition.loop_infinite))
             
             # Variable Sync
             self.loop_var_name.setText(step.condition.loop_count_variable or "")
@@ -352,17 +402,11 @@ class StepPropertiesWidget(QWidget):
             
             self.blockSignals(False)
             return
-        
-        # 6. Await
-        elif step.type == StepType.AWAIT:
-            self.command_combo.setCurrentIndex(6)
-            self.stack.setCurrentIndex(6)
-            self.await_timeout.setValue(step.condition.retry_timeout_s or 10.0)
-            self.await_interval.setValue(step.condition.retry_interval_ms or 500)
 
         # 8. Input
         elif step.type == StepType.INPUT:
             self.command_combo.setCurrentIndex(8)
+            self.type_display.setText(self.command_combo.itemText(8))
             self.stack.setCurrentIndex(8)
             self.input_prompt.setText(step.action.input_prompt or "값을 입력하세요")
             self.input_var_name.setText(step.action.input_variable_name or "count")
@@ -379,6 +423,7 @@ class StepPropertiesWidget(QWidget):
             elif step.action.type == ActionType.KEY: idx = 9
             
             self.command_combo.setCurrentIndex(idx)
+            self.type_display.setText(self.command_combo.itemText(idx))
             self.stack.setCurrentIndex(idx)
             
             if idx == 9:
@@ -488,6 +533,7 @@ class StepPropertiesWidget(QWidget):
             from app.core.models import LoopMode
             self.current_step.condition.loop_mode = LoopMode.WHILE_FOUND if self.loop_mode_combo.currentIndex() == 0 else LoopMode.UNTIL_FOUND
             self.current_step.condition.loop_max_count = self.loop_max_count.value()
+            self.current_step.condition.loop_infinite = self.loop_infinite_cb.isChecked()
             
             # Note: Loop Condition is now determined by the first child step.
 
@@ -520,6 +566,14 @@ class StepPropertiesWidget(QWidget):
              self.current_step.action.key_sequence = self.key_seq_edit.text()
              from app.core.models import KeyInputMode
              self.current_step.action.key_mode = KeyInputMode.PRESS if self.key_mode_combo.currentIndex() == 0 else KeyInputMode.TYPE
+             
+        # 10. Break
+        elif idx == 10:
+            self.current_step.type = StepType.BREAK
+            self.current_step.condition.type = ConditionType.TIME
+            self.current_step.condition.wait_time_s = 0
+            self.current_step.action.type = ActionType.NONE
+            self.current_step.action.key_sequence = None
             
         self.step_changed.emit(self.current_step)
 

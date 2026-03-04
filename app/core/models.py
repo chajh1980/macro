@@ -10,6 +10,7 @@ class StepType(str, Enum):
     UNTIL = "UNTIL" # Legacy, keep for now or deprecate
     AWAIT = "AWAIT"
     INPUT = "INPUT"
+    BREAK = "BREAK"
 
 class ConditionType(str, Enum):
     IMAGE = "IMAGE"
@@ -67,6 +68,7 @@ class Condition(BaseModel):
     loop_mode: LoopMode = LoopMode.UNTIL_FOUND
     loop_max_count: int = 100 # Safety limit
     loop_count_variable: Optional[str] = None # New: Use variable for loop count
+    loop_infinite: bool = False # While(1) support
 
 class Action(BaseModel):
     type: ActionType

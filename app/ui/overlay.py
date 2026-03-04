@@ -18,14 +18,29 @@ class Overlay(QWidget):
         self.highlight_rect = highlight_rect
         
         # 1. Capture Screen State BEFORE showing overlay (Fixes Dimming Bug)
-        import pyautogui
-        self.screen_grab = pyautogui.screenshot() # Returns PIL Image
+        # Prefer pyautogui when available. Fallback to Qt screenshot so capture UI still works
+        # even without pyautogui dependency in this environment.
+        self._screen = QApplication.primaryScreen()
+        self._use_qt_capture = False
+        try:
+            import pyautogui
+            self.screen_grab = pyautogui.screenshot()  # Returns PIL Image
+        except Exception:
+            self._use_qt_capture = True
+            if self._screen is not None:
+                pix = self._screen.grabWindow(0)
+                self.screen_grab = pix.toImage().convertToFormat(QImage.Format.Format_RGBA8888)
+            else:
+                self.screen_grab = QImage(1, 1, QImage.Format.Format_RGBA8888)
         
         # Convert to QPixmap for painting
-        im = self.screen_grab.convert("RGBA")
-        data = im.tobytes("raw", "RGBA")
-        qim = QImage(data, im.size[0], im.size[1], QImage.Format.Format_RGBA8888)
-        self.full_pixmap = QPixmap.fromImage(qim)
+        if self._use_qt_capture:
+            self.full_pixmap = QPixmap.fromImage(self.screen_grab)
+        else:
+            im = self.screen_grab.convert("RGBA")
+            data = im.tobytes("raw", "RGBA")
+            qim = QImage(data, im.size[0], im.size[1], QImage.Format.Format_RGBA8888)
+            self.full_pixmap = QPixmap.fromImage(qim)
          
         
         self.setWindowFlags(
@@ -37,8 +52,8 @@ class Overlay(QWidget):
         self.setStyleSheet("background-color: transparent;")
         
         # Cover primary screen
-        screen = QApplication.primaryScreen()
-        self.setGeometry(screen.geometry())
+        if self._screen is not None:
+            self.setGeometry(self._screen.geometry())
         
         if self.mode == "highlight":
             self.setCursor(Qt.CursorShape.ArrowCursor)
@@ -328,33 +343,17 @@ class Overlay(QWidget):
                 # We need to map logical rect to physical image coordinates.
                 
                 scale = 1.0
-                if self.screen_grab.width > self.width():
-                     scale = self.screen_grab.width / self.width()
+                screen_w = self.screen_grab.width() if self._use_qt_capture else self.screen_grab.width
+                if screen_w > self.width():
+                     scale = screen_w / self.width()
                 
                 left = int(rect.x() * scale)
                 top = int(rect.y() * scale)
                 right = int((rect.x() + rect.width()) * scale)
                 bottom = int((rect.y() + rect.height()) * scale)
                 
-                cropped_img = self.screen_grab.crop((left, top, right, bottom))
-                
-                # Save to specific temp path or emit object?
-                # Existing Editor expects to verify signal... wait Editor logic needs update too.
-                # Let's emit the rect for now, AND save the image to a known location?
-                # Or change signal to emit path?
-                # Let's change signal to emit (QRect, str) -> Rect and file path.
-                
-                import tempfile
-                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-                    cropped_img.save(f.name)
-                    temp_path = f.name
-                
-                self.captured.emit(rect) # Keep signature for now? No, need to pass data.
-                # Signal is defined as pyqtSignal(QRect). I can't change it easily without changing receiver.
-                # BUT I can store the last capture in a public variable or singleton?
-                # Better: Emit a custom signal or change definition.
-                # I will change signal definition to pyqtSignal(object) in next step.
-                self.last_capture_path = temp_path
+                self.captured.emit(rect) 
+                self.last_capture_path = None
                 
             elif self.mode == "point":
                 self.clicked.emit(event.pos().x(), event.pos().y())
@@ -366,16 +365,21 @@ class Overlay(QWidget):
                  
                  # Handle scaling
                  scale = 1.0
-                 if self.screen_grab.width > self.width():
-                      scale = self.screen_grab.width / self.width()
+                 screen_w = self.screen_grab.width() if self._use_qt_capture else self.screen_grab.width
+                 screen_h = self.screen_grab.height() if self._use_qt_capture else self.screen_grab.height
+                 if screen_w > self.width():
+                      scale = screen_w / self.width()
                       
                  px = int(x * scale)
                  py = int(y * scale)
                  
                  # Boundary check
-                 if 0 <= px < self.screen_grab.width and 0 <= py < self.screen_grab.height:
+                 if 0 <= px < screen_w and 0 <= py < screen_h:
+                     if self._use_qt_capture:
+                         pixel = self.screen_grab.pixelColor(px, py).getRgb()[:3]
+                     else:
                      # Force RGBA -> RGB handling
-                     pixel = self.screen_grab.getpixel((px, py))
+                         pixel = self.screen_grab.getpixel((px, py))
                      r, g, b = pixel[:3]
                      hex_color = f"#{r:02x}{g:02x}{b:02x}"
                      self.color_picked.emit(hex_color)

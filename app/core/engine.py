@@ -10,6 +10,10 @@ from app.utils.screen_utils import physical_to_logical
 
 logger = logging.getLogger("app.core.engine")
 
+
+class _LoopBreak(Exception):
+    """Raised when a BREAK step is executed inside a loop body."""
+
 class WorkflowRunner(QObject):
     progress_signal = pyqtSignal(int, str) # Step Index, Step Name
     log_signal = pyqtSignal(str)
@@ -57,15 +61,16 @@ class WorkflowRunner(QObject):
         self.log_signal.emit(f"Testing step: {step.name}")
         
         try:
-            # 1. Check Condition
-            if not self._check_condition(step):
-                self.log_signal.emit(f"Condition failed for step {step.name}.")
+            success, goto_target = self._execute_step(step)
+            if goto_target is not None:
+                self.log_signal.emit(f"GOTO target set to {goto_target + 1} (test mode).")
+            elif success:
+                self.log_signal.emit(f"Action executed for step {step.name}.")
+                self.log_signal.emit(f"Step {step.name} completed.")
             else:
-                self.log_signal.emit(f"Condition met for step {step.name}.")
-                # 2. Execute Action
-                if self.is_running:
-                    self._execute_action(step)
-                    self.log_signal.emit(f"Action executed for step {step.name}.")
+                self.log_signal.emit(f"Step {step.name} failed.")
+        except _LoopBreak:
+            self.log_signal.emit("[BREAK] Break encountered in test mode. Stop workflow.")
         except Exception as e:
             self.log_signal.emit(f"Error testing step: {e}")
         finally:
@@ -82,7 +87,7 @@ class WorkflowRunner(QObject):
         self.log_signal.emit(f"Starting workflow: {self.workflow.name}")
         
         try:
-            self._execute_steps(self.workflow.steps)
+            self._execute_steps(self.workflow.steps, is_root=True)
             self.log_signal.emit("Workflow finished.")
         except Exception as e:
             logger.exception("Error running workflow")
@@ -91,15 +96,21 @@ class WorkflowRunner(QObject):
             self.is_running = False
             self.finished_signal.emit()
 
-    def _execute_steps(self, steps: list[Step]) -> bool:
+    def _execute_steps(self, steps: list[Step], *, is_root: bool = False) -> tuple[bool, Optional[int]]:
         """
         Executes a list of steps sequentially.
-        Returns True if all steps succeeded, False if any failed (and stopped execution).
+        Returns:
+            success: True if completed list without fatal error
+            goto_target: target root index (0-based) when GOTO is requested
         """
-        if not steps: return True
+        if not steps: return True, None
         
-        for step in steps:
-            if not self.is_running: return False
+        idx = 0
+        while idx < len(steps):
+            if not self.is_running:
+                return False, None
+            
+            step = steps[idx]
             
             # Emit Progress
             self.current_step_index += 1
@@ -112,27 +123,39 @@ class WorkflowRunner(QObject):
             # So we should ONLY invalidate if this step generates a NEW match.
             # But if this step is 'Wait', we shouldn't clear the region.
             
-            success = self._execute_step(step)
+            try:
+                success, goto_target = self._execute_step(step)
+            except _LoopBreak:
+                if is_root:
+                    self.log_signal.emit("[BREAK] Break encountered at top-level. Stop workflow.")
+                    return False, None
+                raise
+            
+            if goto_target is not None:
+                if is_root:
+                    if goto_target < 0 or goto_target >= len(self.workflow.steps):
+                        self.log_signal.emit(
+                            f"[GOTO] Invalid target: {goto_target + 1} "
+                            f"(valid range: 1-{len(self.workflow.steps)})"
+                        )
+                        return False, None
+                    idx = goto_target
+                    continue
+                return True, goto_target
             
             if not success:
-                # If a step failed, what to do?
-                # For now, default behavior is Continue or Stop?
-                # User hasn't specified Error Handling.
-                # Assuming "Stop on Failure" for now, EXCEPT for Await loops which handle their own failure.
-                # But _execute_step returns True/False.
-                # If we return False here, the parent block stops.
-                
-                # Check if we should stop
-                # Let's assume critical failure logs have been emitted.
-                pass
+                # Stop on failed step.
+                return False, None
                 
             # Step interval
             if not self._interruptible_sleep(step.step_interval_ms / 1000.0):
-                return False
-                
-        return True
+                return False, None
 
-    def _execute_step(self, step: Step) -> bool:
+            idx += 1
+
+        return True, None
+
+    def _execute_step(self, step: Step) -> tuple[bool, Optional[int]]:
         """
         Executes a single step. Returns True if successful, False if condition failed or action failed.
         """
@@ -150,7 +173,7 @@ class WorkflowRunner(QObject):
             
             # Wait for response (blocking this thread, but allow stop)
             while not self.input_event.is_set():
-                if not self.is_running: return False
+                if not self.is_running: return False, None
                 time.sleep(0.1)
                 
             # 2. Store Variable
@@ -163,61 +186,201 @@ class WorkflowRunner(QObject):
                 
             self.variables[var_name] = val
             self.log_signal.emit(f"[INPUT] Stored '{val}' in variable '{var_name}'")
-            return True
+            return True, None
 
         # 1. Handle Control Flow Steps
+        if step.type == StepType.BREAK:
+            self.log_signal.emit(f"[BREAK] {step.name} triggered. Exiting nearest loop.")
+            raise _LoopBreak()
+
         if step.type == StepType.IF:
-            # Check condition (ConditionType.IMAGE/COLOR usually)
-            # If True -> Run Children
-            # If False -> Skip Children
+            # Prefer using the first child as condition (e.g. prebuilt Find Image).
+            # If no children remain, fallback to step-level condition for compatibility.
+            if step.children:
+                self.log_signal.emit("[IF] Checking first child as condition...")
+                cond_ok, goto_target = self._execute_step(step.children[0])
+                if goto_target is not None:
+                    return True, goto_target
+
+                if not cond_ok:
+                    self.log_signal.emit(f"[IF] Condition child failed. Skipping children.")
+                    return True, None
+
+                self.log_signal.emit(f"[IF] Condition child met. Executing remaining children...")
+                if len(step.children) > 1:
+                    success, goto_target = self._execute_steps(step.children[1:], is_root=False)
+                    if goto_target is not None:
+                        return True, goto_target
+                    return success, None
+
+                self.log_signal.emit("[IF] Condition child met. No child action steps.")
+                return True, None
+
             if self._check_condition(step):
-                self.log_signal.emit(f"[IF] Condition met. Executing children...")
-                return self._execute_steps(step.children)
+                self.log_signal.emit(f"[IF] Condition met. No child steps.")
+                return True, None
             else:
                 self.log_signal.emit(f"[IF] Condition failed. Skipping children.")
-                return True # Inherently successful in execution, just didn't run children.
+                return True, None # Inherently successful in execution, just didn't run children.
                 
         elif step.type == StepType.LOOP:
-            # Smart Loop Logic
-            # Condition: First Child Step
-            # Body: Remaining Children
+            return self._execute_loop(step, step.condition.loop_mode)
             
-            mode = step.condition.loop_mode
-            max_count = step.condition.loop_max_count or 100
+        elif step.type == StepType.UNTIL:
+            # Deprecated Legacy Handling (keeping for safety if user has old steps)
+            return self._execute_until_legacy(step)
             
-            # Check for Variable Override
-            if step.condition.loop_count_variable:
-                var_name = step.condition.loop_count_variable
-                if var_name in self.variables:
-                    val = self.variables[var_name]
-                    if isinstance(val, int):
-                        max_count = val
-                        self.log_signal.emit(f"[LOOP] Using variable '{var_name}' = {max_count}")
-                    else:
-                        self.log_signal.emit(f"[LOOP] Variable '{var_name}' is not an integer ({val}). Using default {max_count}.")
+        elif step.type == StepType.AWAIT:
+            # Logic: Retry children UNTIL they succeed (return True).
+            # Timeout: step.condition.retry_timeout_s
+            # Interval: step.condition.retry_interval_ms
+            if not step.children:
+                self.log_signal.emit(f"[AWAIT] No child steps. Treating as successful.")
+                return True, None
+
+            timeout = step.condition.retry_timeout_s or 10.0
+            interval = (step.condition.retry_interval_ms or 500) / 1000.0
+            start_time = time.time()
+            condition_step = step.children[0]
+            body_steps = step.children[1:] if len(step.children) > 1 else []
+            
+            self.log_signal.emit(f"[AWAIT] Waiting for children to succeed (Timeout: {timeout}s)...")
+            
+            while self.is_running:
+                # Check first child as condition.
+                cond_ok, goto_target = self._execute_step(condition_step)
+                if goto_target is not None:
+                    return True, goto_target
+                
+                if cond_ok:
+                    if body_steps:
+                        children_success, goto_target = self._execute_steps(body_steps, is_root=False)
+                        if goto_target is not None:
+                            return True, goto_target
+                        if children_success:
+                            self.log_signal.emit("[AWAIT] Condition and body execution successful.")
+                            return True, None
+                        self.log_signal.emit("[AWAIT] Body execution failed/stopped.")
+                        return False, None
+
+                    self.log_signal.emit("[AWAIT] Condition succeeded.")
+                    return True, None
+                
+                # Check Timeout
+                elapsed = time.time() - start_time
+                if elapsed > timeout:
+                    self.log_signal.emit(f"[AWAIT] Timeout reached ({elapsed:.1f}s / {timeout}s). Failed.")
+                    return False, None
+                
+                # Wait Interval
+                self.log_signal.emit(f"[AWAIT] Condition failed. Retrying in {interval}s... (Elapsed: {elapsed:.1f}s)")
+                if not self._interruptible_sleep(interval):
+                    return False, None
+                     
+            return False, None # Stopped
+            
+        # 2. General Steps (Find Image, Click, etc.)
+        else:
+            # Check Condition
+            condition_met = self._check_condition(step)
+            
+            if not condition_met:
+                # If condition was TIME (Wait), it returns True usually (unless stopped).
+                # If IMAGE/COLOR/TEXT, it returns False if not found.
+                self.log_signal.emit(f"Condition failed: {step.name}")
+                return False, None
+            
+            # Execute Action (if condition met)
+            # Some steps might have ActionType.NONE (e.g. Find Image only, no auto move?)
+            # But usually Find Image has Action.MOVE default.
+            if self.is_running:
+                success, goto_target = self._execute_action(step)
+                if goto_target is not None:
+                    return True, goto_target
+                if not success:
+                    return False, None
+            
+            return True, None
+
+    def _execute_loop(self, step: Step, mode: LoopMode) -> tuple[bool, Optional[int]]:
+        # Smart Loop Logic
+        # Condition: First Child Step
+        # Body: Remaining Children
+        
+        max_count = step.condition.loop_max_count or 100
+        loop_infinite = bool(step.condition.loop_infinite)
+        
+        # while(1) mode: run body repeatedly without any condition check.
+        if loop_infinite and not step.children:
+            self.log_signal.emit("[LOOP] Invalid config: Infinite loop has no body. Add at least one step and rerun.")
+            return False, None
+        
+        # Check for Variable Override
+        if step.condition.loop_count_variable:
+            var_name = step.condition.loop_count_variable
+            if var_name in self.variables:
+                val = self.variables[var_name]
+                if isinstance(val, int):
+                    max_count = val
+                    self.log_signal.emit(f"[LOOP] Using variable '{var_name}' = {max_count}")
                 else:
-                    self.log_signal.emit(f"[LOOP] Variable '{var_name}' not found. Using default {max_count}.")
-            
-            self.log_signal.emit(f"[LOOP] Starting {mode.value} (Max: {max_count})...")
-            
+                    self.log_signal.emit(f"[LOOP] Variable '{var_name}' is not an integer ({val}). Using default {max_count}.")
+            else:
+                self.log_signal.emit(f"[LOOP] Variable '{var_name}' not found. Using default {max_count}.")
+        
+        if loop_infinite:
+            self.log_signal.emit("[LOOP] Starting infinite loop (while1)...")
+            condition_step = None
+            body_steps = step.children
+        else:
+            self.log_signal.emit(f"[LOOP] Starting {mode.value} loop (Max: {max_count})...")
             if not step.children:
                 self.log_signal.emit(f"[LOOP] Error: No condition step (first child) found.")
-                return False
+                return False, None
+            condition_step = step.children[0]
+            body_steps = step.children[1:]
+        
+        count = 0
+        while self.is_running:
+            if loop_infinite:
+                if body_steps:
+                    try:
+                        body_ok, goto_target = self._execute_steps(body_steps, is_root=False)
+                    except _LoopBreak:
+                        self.log_signal.emit("[LOOP] Break encountered. Exiting loop.")
+                        return True, None
+                    if goto_target is not None:
+                        return True, goto_target
+                    if not body_ok:
+                        # For while(1), body failures should not terminate the loop.
+                        # Log and continue retrying until user stops execution.
+                        self.log_signal.emit("[LOOP] Body execution failed; retrying loop body.")
+                        if not self._interruptible_sleep(0.1):
+                            return False, None
+                        continue
+                else:
+                    # Prevent instant infinite loops if body is empty
+                    if not self._interruptible_sleep(0.1):
+                        return False, None
+                continue
+
+            # 1. Check Max Count
+            if not loop_infinite and count >= max_count:
+                self.log_signal.emit(f"[LOOP] Max count ({max_count}) reached. Stopping.")
+                break
                 
-            count = 0
-            while self.is_running:
-                # 1. Check Max Count
-                if count >= max_count:
-                    self.log_signal.emit(f"[LOOP] Max count ({max_count}) reached. Stopping.")
-                    break
-                    
-                # 2. Check Condition (Execute First Child)
-                # First child is the "Condition Step". We execute it and see if it returns True.
-                cond_step = step.children[0]
-                is_found = self._execute_step(cond_step)
-                
-                should_run_body = False
-                
+            # 2. Check Condition (Execute First Child)
+            # First child is the "Condition Step". We execute it and see if it returns True.
+            try:
+                is_found, goto_target = self._execute_step(condition_step)
+            except _LoopBreak:
+                self.log_signal.emit("[LOOP] Break encountered in condition. Exiting loop.")
+                return True, None
+            if goto_target is not None:
+                return True, goto_target
+            
+            should_run_body = loop_infinite
+            if not loop_infinite:
                 if mode == LoopMode.WHILE_FOUND:
                     if is_found:
                          should_run_body = True
@@ -233,96 +396,35 @@ class WorkflowRunner(QObject):
                     else:
                          self.log_signal.emit(f"[LOOP] Condition Met (Found!). Loop Ends.")
                          break
-                
-                # 3. Execution (Body)
-                if should_run_body:
-                    body_steps = step.children[1:]
-                    if body_steps:
-                        if not self._execute_steps(body_steps):
-                             self.log_signal.emit(f"[LOOP] Body execution failed/stopped.")
-                             return False 
-                    
-                    count += 1
-                    
-                    # Prevent instant infinite loops if body is empty
-                    if not body_steps:
-                        self._interruptible_sleep(0.1)
+            
+            # 3. Execution (Body)
+            if should_run_body:
+                if body_steps:
+                    try:
+                        body_ok, goto_target = self._execute_steps(body_steps, is_root=False)
+                    except _LoopBreak:
+                        self.log_signal.emit("[LOOP] Break encountered. Exiting loop.")
+                        return True, None
+                    if goto_target is not None:
+                        return True, goto_target
+                    if not body_ok:
+                        self.log_signal.emit(f"[LOOP] Body execution failed/stopped.")
+                        return False, None
                 else:
-                    break
-                    
-            return True
-            
-        elif step.type == StepType.UNTIL:
-            # Deprecated Legacy Handling (keeping for safety if user has old steps)
-            return self._execute_until_legacy(step)
-            
-        elif step.type == StepType.AWAIT:
-            # Logic: Retry children UNTIL they succeed (return True).
-            # Timeout: step.condition.retry_timeout_s
-            # Interval: step.condition.retry_interval_ms
-            
-            timeout = step.condition.retry_timeout_s or 10.0
-            interval = (step.condition.retry_interval_ms or 500) / 1000.0
-            start_time = time.time()
-            
-            self.log_signal.emit(f"[AWAIT] Waiting for children to succeed (Timeout: {timeout}s)...")
-            
-            while self.is_running:
-                # Run children. If _execute_steps returns True, it means ALL children succeeded.
-                # We assume "Child Condition" is the first step or all steps.
-                # If any child fails, _execute_steps continues? 
-                # Wait, _execute_steps currently runs all. 
-                # We need to know if the "Find Image" child *found* it.
-                # 'Find Image' returns True if found, False if not.
+                    # Prevent instant infinite loops if body is empty
+                    if not self._interruptible_sleep(0.1):
+                        return False, None
                 
-                # We need to capture the success of the children.
-                # But _execute_steps runs sequentially.
-                # If we have [Find Image], `_execute_step` returns True/False.
-                # We need `_execute_steps` to propagate failure?
-                # Currently `_execute_steps` ignores failure ("pass").
-                # I should change that.
+                count += 1
+            else:
+                break
                 
-                children_success = True
-                for child in step.children:
-                    if not self._execute_step(child):
-                        children_success = False
-                        break # Stop executing remaining children in this attempt
-                
-                if children_success:
-                    self.log_signal.emit(f"[AWAIT] Children execution successful.")
-                    return True
-                
-                # Check Timeout
-                elapsed = time.time() - start_time
-                if elapsed > timeout:
-                    self.log_signal.emit(f"[AWAIT] Timeout reached ({elapsed:.1f}s / {timeout}s). Failed.")
-                    return False
-                
-                # Wait Interval
-                self.log_signal.emit(f"[AWAIT] Condition failed. Retrying in {interval}s... (Elapsed: {elapsed:.1f}s)")
-                if not self._interruptible_sleep(interval):
-                     return False
-                     
-            return False # Stopped
-            
-        # 2. General Steps (Find Image, Click, etc.)
-        else:
-            # Check Condition
-            condition_met = self._check_condition(step)
-            
-            if not condition_met:
-                # If condition was TIME (Wait), it returns True usually (unless stopped).
-                # If IMAGE/COLOR/TEXT, it returns False if not found.
-                self.log_signal.emit(f"Condition failed: {step.name}")
-                return False
-            
-            # Execute Action (if condition met)
-            # Some steps might have ActionType.NONE (e.g. Find Image only, no auto move?)
-            # But usually Find Image has Action.MOVE default.
-            if self.is_running:
-                self._execute_action(step)
-            
-            return True
+        return True, None
+
+    def _execute_until_legacy(self, step: Step) -> tuple[bool, Optional[int]]:
+        # Keep old workflow compatibility if UNTIL remains in persisted files.
+        self.log_signal.emit("[UNTIL] Running legacy UNTIL block as Smart Loop (UNTIL_FOUND).")
+        return self._execute_loop(step, LoopMode.UNTIL_FOUND)
 
     def _check_condition(self, step: Step) -> bool:
         condition = step.condition
@@ -403,18 +505,20 @@ class WorkflowRunner(QObject):
                 
         return False
 
-    def _execute_action(self, step: Step):
+    def _execute_action(self, step: Step) -> tuple[bool, Optional[int]]:
         action = step.action
         
         if action.type == ActionType.NONE:
-            return
+            return True, None
 
         elif action.type == ActionType.GOTO:
             if action.goto_step_index is not None:
                 # PRD uses 1-based, internal is 0-based
-                self.current_step_index = action.goto_step_index - 1
-                self.log_signal.emit(f"GOTO: Jumping to step {action.goto_step_index}")
-                return True
+                if action.goto_step_index <= 0:
+                    self.log_signal.emit(f"[GOTO] Invalid target: {action.goto_step_index}.")
+                    return False, None
+                return True, action.goto_step_index - 1
+            return False, None
 
         elif action.type == ActionType.MOVE:
             move_x = None
@@ -441,15 +545,17 @@ class WorkflowRunner(QObject):
                 pyautogui.moveTo(move_x, move_y)
             else:
                 logger.warning("Move action requested but no target set.")
+            return True, None
             
         elif action.type == ActionType.CLICK:
              if action.target_x is not None and action.target_y is not None and (action.target_x != 0 or action.target_y != 0):
                  pyautogui.moveTo(action.target_x, action.target_y)
              pyautogui.click()
+             return True, None
 
         elif action.type == ActionType.KEY:
             if not action.key_sequence:
-                return
+                return True, None
             
             mode = action.key_mode
             if mode == KeyInputMode.PRESS:
@@ -465,6 +571,9 @@ class WorkflowRunner(QObject):
                 self.log_signal.emit(f"Typing: {action.key_sequence}")
                 # interval=0.1 to be realistic/safe?
                 pyautogui.write(action.key_sequence, interval=0.05)
+            return True, None
+        
+        return True, None
              
     def _handle_sequential_click(self, step: Step):
         image_path = step.condition.target_image_path

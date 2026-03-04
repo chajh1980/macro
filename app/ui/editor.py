@@ -704,3 +704,17 @@ class WorkflowEditor(QMainWindow):
         else:
             self.on_close_callback()
             event.accept()
+
+
+# Backward compatible v2 export: opening this module as legacy editor entry should use V2
+try:
+    from app.ui.workflow_editor_v2 import WorkflowEditorV2, launch_v2_editor
+
+    WorkflowEditor = WorkflowEditorV2
+
+    def launch_editor(workflow_name: str, on_close):
+        return launch_v2_editor(workflow_name, on_close)
+
+except Exception:
+    # Keep compatibility if V2 import fails for any reason
+    pass
